@@ -32,6 +32,7 @@ nav button.on{background:var(--acc-soft);color:var(--acc);font-weight:600}
 label.chk{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;cursor:pointer;user-select:none}
 label.chk input{accent-color:var(--acc)}
 label.chk small{color:var(--mute)}
+label.hardchk:has(input:checked){border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent);color:var(--bad)}
 .field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mute)}
 select,input[type=number]{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
 input[type=number]{width:64px}
@@ -101,10 +102,10 @@ svg .lbl{fill:var(--ink);font-size:12px;font-weight:600}
   <div id="setup">
     <div class="card">
       <h2>Round</h2>
-      <h3 style="margin-top:0">Zetamac</h3>
       <div class="row" id="opsCore"></div>
-      <h3>Extras</h3>
-      <div class="row" id="opsExtra"></div>
+      <div class="row" style="margin-top:10px">
+        <label class="chk hardchk"><input type="checkbox" id="hard"> <b>Hard mode</b></label>
+      </div>
       <div class="grid2" style="margin-top:16px">
         <div class="field">Duration
           <select id="dur"><option value="60">60 s</option><option value="120" selected>120 s (Zetamac)</option><option value="180">180 s</option><option value="300">300 s</option></select>
@@ -112,16 +113,13 @@ svg .lbl{fill:var(--ink);font-size:12px;font-weight:600}
         <div class="field">Counts as "slow" after
           <select id="thr"><option value="2">2.0 s</option><option value="2.5">2.5 s</option><option value="3" selected>3.0 s</option><option value="4">4.0 s</option><option value="5">5.0 s</option><option value="6">6.0 s</option></select>
         </div>
-        <div class="field">Unit circle angles
-          <select id="trigUnit"><option value="rad">Radians (π/6)</option><option value="deg">Degrees (30°)</option><option value="mix" selected>Both</option></select>
-        </div>
       </div>
       <div class="row" style="margin-top:18px">
         <button class="btn" id="start">Start round</button>
         <button class="btn ghost" id="startWeak">Weak-only drill</button>
       </div>
       <p class="hint" id="setupHint">Answers submit automatically, like Zetamac. A problem goes on your weak list if you type a wrong answer or go over the slow threshold. It leaves the list after 3 fast, clean solves in a row. Esc ends a round.</p>
-      <p class="hint">Extras accept typed exact values: <b>r3/2</b> for √3/2, <b>1/2</b> or <b>.5</b>, <b>u</b> for undefined, <b>-inf</b> for −∞. Press Enter to submit a wrong guess and move on to retrying.</p>
+      <p class="hint" id="hardHint">Hard mode answers can be exact values. Type <b>r3/2</b> for √3/2, <b>1/2</b> or <b>.5</b>, <b>u</b> for undefined, <b>-inf</b> for −∞, and press Enter to submit a guess.</p>
     </div>
     <div class="card">
       <h2>Ranges</h2>
@@ -235,7 +233,7 @@ const OPS = [
 const OPNAME = {add:'Add',sub:'Sub',mul:'Mul',div:'Div',trig:'Trig',log:'Log/exp',pow:'Powers',poly:'Poly',comb:'Comb'};
 const PREFIX = {a:'add',s:'sub',m:'mul',d:'div',t:'trig',l:'log',x:'pow',p:'poly',c:'comb'};
 const NUMERIC_OPS = new Set(['add','sub','mul','div','pow','comb']);
-const DEF = {ops:Object.fromEntries(OPS.map(o => [o.id, !!o.core])),dur:120,thr:3,trigUnit:'mix',a1:2,a2:100,b1:2,b2:100,m1:2,m2:12,n1:2,n2:100};
+const DEF = {ops:Object.fromEntries(OPS.map(o => [o.id, !!o.core])),dur:120,thr:3,hard:false,a1:2,a2:100,b1:2,b2:100,m1:2,m2:12,n1:2,n2:100};
 const REVIEW_MIX = 35; // % of problems drawn from the weak list in a normal round
 const MAX_ENTRIES = 600, GRAD = 3, TIMES_CAP = 400;
 
@@ -298,22 +296,23 @@ async function initSync(){
 /* ---------- settings UI ---------- */
 function opBox(o){ return `<label class="chk"><input type="checkbox" data-op="${o.id}"> ${o.label}${o.note?` <small>${o.note}</small>`:''}</label>`; }
 $('#opsCore').innerHTML = OPS.filter(o=>o.core).map(opBox).join('');
-$('#opsExtra').innerHTML = OPS.filter(o=>!o.core).map(opBox).join('');
 const numIds = ['a1','a2','b1','b2','m1','m2','n1','n2'];
 function loadSettingsUI(){
   const s = state.settings;
   $$('[data-op]').forEach(c => c.checked = !!s.ops[c.dataset.op]);
-  $('#dur').value = String(s.dur); $('#thr').value = String(s.thr); $('#trigUnit').value = s.trigUnit;
+  $('#dur').value = String(s.dur); $('#thr').value = String(s.thr); $('#hard').checked = !!s.hard;
+  $('#hardHint').classList.toggle('hidden', !s.hard);
   numIds.forEach(k => $('#'+k).value = s[k]);
 }
 function readSettingsUI(){
   const s = state.settings;
   $$('[data-op]').forEach(c => s.ops[c.dataset.op] = c.checked);
-  s.dur = +$('#dur').value; s.thr = +$('#thr').value; s.trigUnit = $('#trigUnit').value;
+  s.dur = +$('#dur').value; s.thr = +$('#thr').value; s.hard = $('#hard').checked;
+  $('#hardHint').classList.toggle('hidden', !s.hard);
   numIds.forEach(k => { const v = parseInt($('#'+k).value, 10); s[k] = isNaN(v) ? DEF[k] : v; });
   [['a1','a2'],['b1','b2'],['m1','m2'],['n1','n2']].forEach(([lo,hi]) => { if (s[lo] > s[hi]) [s[lo], s[hi]] = [s[hi], s[lo]]; });
 }
-$('#defaults').addEventListener('click', () => { const o = state.settings.ops, u = state.settings.trigUnit; state.settings = {...DEF, ops:o, trigUnit:u}; loadSettingsUI(); save(); });
+$('#defaults').addEventListener('click', () => { const o = state.settings.ops, h = state.settings.hard; state.settings = {...DEF, ops:o, hard:h}; loadSettingsUI(); save(); });
 $('#setup').addEventListener('change', () => { readSettingsUI(); save(); });
 
 /* ---------- answer normalisation ---------- */
@@ -482,7 +481,7 @@ function gen(op){
     if (op === 'mul') return fromKey(`m:${a}x${b}`);
     return fromKey(Math.random()<.6 ? `d:${a*b}/${a}` : `d:${a*b}/${b}`);
   }
-  if (op === 'trig') { const u = s.trigUnit === 'mix' ? pick(['r','d']) : s.trigUnit === 'deg' ? 'd' : 'r'; return trigProb(pick(['sin','cos','tan']), pick(ANG), u); }
+  if (op === 'trig') { const u = pick(['r','d']); return trigProb(pick(['sin','cos','tan']), pick(ANG), u); }
   if (op === 'log') return logProb(ri(0, LOGS.length-1));
   if (op === 'pow') return genPow();
   if (op === 'poly') return genPoly();
@@ -514,7 +513,7 @@ $('#keys').addEventListener('pointerdown', e => {
 
 /* ---------- game ---------- */
 let G = null;
-function enabledOps(){ return OPS.map(o=>o.id).filter(k => state.settings.ops[k]); }
+function enabledOps(){ return OPS.filter(o => o.core ? state.settings.ops[o.id] : state.settings.hard).map(o => o.id); }
 function startRound(weakOnly){
   readSettingsUI(); save();
   const ops = enabledOps();
@@ -524,7 +523,7 @@ function startRound(weakOnly){
   $$('nav button').forEach((x,i) => x.classList.toggle('on', i===0));
   ['play','weak','hist'].forEach(t => $('#tab-'+t).classList.toggle('hidden', t !== 'play'));
   $('#setup').classList.add('hidden'); $('#results').classList.add('hidden'); $('#game').style.display='block';
-  $('#modeLbl').textContent = weakOnly ? 'weak-only' : '';
+  $('#modeLbl').textContent = (state.settings.hard ? 'hard ' : '') + (weakOnly ? 'weak-only' : '');
   $('#score').textContent = '0';
   next(); tick();
   const inp = $('#answer'); inp.value=''; inp.focus();
@@ -792,9 +791,9 @@ function renderHist(){
     $('#chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%">${ticks}<polyline points="${pts}" fill="none" stroke="var(--line)" stroke-width="1.5"/>${h.map((x,i)=>`<circle cx="${X(i)}" cy="${Y(x.score)}" r="2.5" fill="var(--mute)"/>`).join('')}<polyline points="${apts}" fill="none" stroke="var(--acc)" stroke-width="2.5"/></svg><p class="hint">Dots are individual rounds and the blue line is a 5-round moving average. Best: <b>${Math.max(...ys)}</b>. Last 5 average: <b>${avg[avg.length-1].toFixed(1)}</b>.</p>`;
   }
   const r = state.hist.slice(-20).reverse();
-  const opn = s => (s.includes(',') ? s.split(',') : (s.match(/add|sub|mul|div/g)||[])).map(o => OPNAME[o] || o).join(' ');
+  const opn = s => (s.includes(',') ? s.split(',') : (s.match(/add|sub|mul|div/g)||[])).filter(o => ['add','sub','mul','div'].includes(o)).map(o => OPNAME[o]).join(' ');
   $('#histList').innerHTML = r.length
-    ? `<table><tr><th>When</th><th>Score</th><th>Length</th><th>Types</th><th>Mode</th></tr>${r.map(x=>`<tr><td class="txt">${new Date(x.ts).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</td><td>${x.score}</td><td>${x.dur}s</td><td class="txt">${opn(x.ops)}</td><td class="txt">${x.weak?'Weak-only':'Standard'}</td></tr>`).join('')}</table>`
+    ? `<table><tr><th>When</th><th>Score</th><th>Length</th><th>Types</th><th>Mode</th></tr>${r.map(x=>`<tr><td class="txt">${new Date(x.ts).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</td><td>${x.score}</td><td>${x.dur}s</td><td class="txt">${opn(x.ops)}</td><td class="txt">${(x.ops.includes('trig')?'Hard, ':'') + (x.weak?'weak-only':'standard')}</td></tr>`).join('')}</table>`
     : '<div class="empty">No rounds yet.</div>';
 }
 
