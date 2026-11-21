@@ -108,9 +108,6 @@ svg .lbl{fill:var(--ink);font-size:12px;font-weight:600}
         <div class="field">Unit circle angles
           <select id="trigUnit"><option value="rad">Radians (π/6)</option><option value="deg">Degrees (30°)</option><option value="mix" selected>Both</option></select>
         </div>
-        <div class="field">Review mix: <b id="mixv" style="color:var(--ink)">35%</b> of problems from your weak list
-          <input type="range" id="mix" min="0" max="80" step="5" value="35">
-        </div>
       </div>
       <div class="row" style="margin-top:18px">
         <button class="btn" id="start">Start round</button>
@@ -225,7 +222,8 @@ const OPS = [
 const OPNAME = {add:'Add',sub:'Sub',mul:'Mul',div:'Div',trig:'Trig',log:'Log/exp',pow:'Powers',poly:'Poly',comb:'Comb'};
 const PREFIX = {a:'add',s:'sub',m:'mul',d:'div',t:'trig',l:'log',x:'pow',p:'poly',c:'comb'};
 const NUMERIC_OPS = new Set(['add','sub','mul','div','pow','comb']);
-const DEF = {ops:Object.fromEntries(OPS.map(o => [o.id, !!o.core])),dur:120,thr:3,mix:35,trigUnit:'mix',a1:2,a2:100,b1:2,b2:100,m1:2,m2:12,n1:2,n2:100};
+const DEF = {ops:Object.fromEntries(OPS.map(o => [o.id, !!o.core])),dur:120,thr:3,trigUnit:'mix',a1:2,a2:100,b1:2,b2:100,m1:2,m2:12,n1:2,n2:100};
+const REVIEW_MIX = 35; // % of problems drawn from the weak list in a normal round
 const MAX_ENTRIES = 600, GRAD = 3, TIMES_CAP = 400;
 
 let state = blank();
@@ -293,17 +291,15 @@ function loadSettingsUI(){
   const s = state.settings;
   $$('[data-op]').forEach(c => c.checked = !!s.ops[c.dataset.op]);
   $('#dur').value = String(s.dur); $('#thr').value = String(s.thr); $('#trigUnit').value = s.trigUnit;
-  $('#mix').value = s.mix; $('#mixv').textContent = s.mix + '%';
   numIds.forEach(k => $('#'+k).value = s[k]);
 }
 function readSettingsUI(){
   const s = state.settings;
   $$('[data-op]').forEach(c => s.ops[c.dataset.op] = c.checked);
-  s.dur = +$('#dur').value; s.thr = +$('#thr').value; s.mix = +$('#mix').value; s.trigUnit = $('#trigUnit').value;
+  s.dur = +$('#dur').value; s.thr = +$('#thr').value; s.trigUnit = $('#trigUnit').value;
   numIds.forEach(k => { const v = parseInt($('#'+k).value, 10); s[k] = isNaN(v) ? DEF[k] : v; });
   [['a1','a2'],['b1','b2'],['m1','m2'],['n1','n2']].forEach(([lo,hi]) => { if (s[lo] > s[hi]) [s[lo], s[hi]] = [s[hi], s[lo]]; });
 }
-$('#mix').addEventListener('input', e => $('#mixv').textContent = e.target.value + '%');
 $('#defaults').addEventListener('click', () => { const o = state.settings.ops, u = state.settings.trigUnit; state.settings = {...DEF, ops:o, trigUnit:u}; loadSettingsUI(); save(); });
 $('#setup').addEventListener('change', () => { readSettingsUI(); save(); });
 
@@ -515,7 +511,7 @@ function startRound(weakOnly){
   $$('nav button').forEach((x,i) => x.classList.toggle('on', i===0));
   ['play','weak','hist'].forEach(t => $('#tab-'+t).classList.toggle('hidden', t !== 'play'));
   $('#setup').classList.add('hidden'); $('#results').classList.add('hidden'); $('#game').style.display='block';
-  $('#modeLbl').textContent = weakOnly ? 'weak-only' : `review ${state.settings.mix}%`;
+  $('#modeLbl').textContent = weakOnly ? 'weak-only' : '';
   $('#score').textContent = '0';
   next(); tick();
   const inp = $('#answer'); inp.value=''; inp.focus();
@@ -523,7 +519,7 @@ function startRound(weakOnly){
 function alertInline(msg){ const h = $('#setupHint'); const old = h.dataset.orig || h.textContent; h.dataset.orig = old; h.textContent = msg; h.style.color='var(--bad)'; setTimeout(()=>{h.textContent=old;h.style.color='';},3500); }
 function next(){
   let p = null, review = false;
-  if (G.weakOnly || Math.random()*100 < state.settings.mix) { p = pickWeak(G.ops, G.recent); review = !!p; }
+  if (G.weakOnly || Math.random()*100 < REVIEW_MIX) { p = pickWeak(G.ops, G.recent); review = !!p; }
   if (!p) { for (let i=0;i<6;i++){ p = gen(G.ops[ri(0,G.ops.length-1)]); if (!G.recent.includes(p.key)) break; } }
   G.cur = p; G.cur.review = review; G.t0 = performance.now(); G.errs = 0; G.tried = new Set();
   G.recent.push(p.key); if (G.recent.length > 6) G.recent.shift();
@@ -588,7 +584,7 @@ function finish(quit){
   const g = G; G = null;
   $('#game').style.display='none';
   const full = !quit;
-  if (full) state.hist.push({ts:Date.now(), score:g.score, dur:state.settings.dur, ops:g.ops.join(','), weak:g.weakOnly, mix:state.settings.mix});
+  if (full) state.hist.push({ts:Date.now(), score:g.score, dur:state.settings.dur, ops:g.ops.join(','), weak:g.weakOnly});
   if (state.hist.length > 300) state.hist = state.hist.slice(-300);
   prune(); save();
   showResults(g, full);
@@ -713,7 +709,7 @@ function renderHist(){
   const r = state.hist.slice(-20).reverse();
   const opn = s => (s.includes(',') ? s.split(',') : (s.match(/add|sub|mul|div/g)||[])).map(o => OPNAME[o] || o).join(' ');
   $('#histList').innerHTML = r.length
-    ? `<table><tr><th>When</th><th>Score</th><th>Length</th><th>Types</th><th>Mode</th></tr>${r.map(x=>`<tr><td class="txt">${new Date(x.ts).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</td><td>${x.score}</td><td>${x.dur}s</td><td class="txt">${opn(x.ops)}</td><td class="txt">${x.weak?'weak-only':'review '+(x.mix??0)+'%'}</td></tr>`).join('')}</table>`
+    ? `<table><tr><th>When</th><th>Score</th><th>Length</th><th>Types</th><th>Mode</th></tr>${r.map(x=>`<tr><td class="txt">${new Date(x.ts).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</td><td>${x.score}</td><td>${x.dur}s</td><td class="txt">${opn(x.ops)}</td><td class="txt">${x.weak?'Weak-only':'Standard'}</td></tr>`).join('')}</table>`
     : '<div class="empty">No rounds yet.</div>';
 }
 
