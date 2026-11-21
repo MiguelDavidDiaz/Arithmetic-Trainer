@@ -12,6 +12,8 @@ Zetamac gives you random problems every time. Zeta Drill uses the same default g
 - **Weak list:** a problem goes on the list if you type a wrong answer or go over a slow threshold (3 s by default, adjustable). It comes off after 3 fast, clean solves in a row.
 - **Review mix:** a set share of each round (35% by default) comes from your weak list. The slowest problems and the ones you miss most often get picked more.
 - **Weak-only drills:** a round made entirely of your misses.
+- **Extras (optional):** unit-circle sin/cos/tan in radians or degrees, logs and exponents (`ln 0`, `log₂ 64`, `8^(2/3)`), powers and roots (`x²` to 30, `x³`, `2ⁿ`, `√`, `∛`), polynomials evaluated at a point, and combinatorics (`n!`, `C(n,k)`, `P(n,k)`). Exact answers are typed as `r3/2` for √3/2, `1/2` or `.5`, `u` for undefined and `-inf` for −∞, and on mobile there's an on-screen key row.
+- **Solve-time distributions:** a box-and-dot plot for each operation (median, IQR, p10–p90, slow threshold) after every round and across your last 400 solves.
 - **Fact-family heatmap:** average time and flag rate for each family: +, −, ×2…×12, ÷2…÷12.
 - **Score history:** a chart of every 120-second round with a 5-round moving average.
 - **Export / Import:** progress is stored in `localStorage`. Export a JSON file to move it to another device.
