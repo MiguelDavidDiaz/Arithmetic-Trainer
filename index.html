@@ -75,6 +75,13 @@ td.txt{font-family:inherit}
 svg text{fill:var(--mute);font-size:11px;font-family:var(--mono)}
 svg .lbl{fill:var(--ink);font-size:12px;font-weight:600}
 .hidden{display:none!important}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--mute);margin:4px 0 6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.clickable rect[data-i],.clickable rect[data-b]{cursor:pointer}
+.clickable rect.sel{stroke:var(--ink);stroke-width:2}
+.pick{margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;min-height:44px;background:var(--bg)}
+.pick .pt{font-family:var(--mono);font-size:18px;font-weight:600}
+.pick .pm{color:var(--mute);font-size:13px;margin-top:2px}
 </style>
 </head>
 <body>
@@ -145,7 +152,13 @@ svg .lbl{fill:var(--ink);font-size:12px;font-weight:600}
       <h2>Result</h2>
       <div class="row" style="align-items:flex-end;gap:16px"><div class="big" id="rScore">0</div><div id="rNote" style="color:var(--mute);padding-bottom:6px"></div></div>
       <div class="stats" id="rStats"></div>
-      <h3>Solve-time distribution, this round</h3>
+      <h3>Every problem in the round, in order</h3>
+      <div class="legend" id="rLegend"></div>
+      <div id="rTimeline" class="clickable"></div>
+      <h3>Solve times across all problems</h3>
+      <div id="rHist" class="clickable"></div>
+      <div class="pick" id="rPick"><span style="color:var(--mute)">Click a bar to see which problem it was.</span></div>
+      <h3>Solve-time distribution by type</h3>
       <div id="rDist"></div>
     </div>
     <div class="card">
@@ -507,7 +520,7 @@ function startRound(weakOnly){
   const ops = enabledOps();
   if (!ops.length) { alertInline('Pick at least one operation.'); return; }
   if (weakOnly && !weakEntries(ops).length) { alertInline('Your weak list is empty for these operations. Play a normal round first.'); return; }
-  G = {weakOnly, ops, score:0, end:performance.now() + state.settings.dur*1000, recent:[], log:[], cur:null, t0:0, errs:0, tried:new Set()};
+  G = {weakOnly, ops, start:performance.now(), score:0, end:performance.now() + state.settings.dur*1000, recent:[], log:[], cur:null, t0:0, errs:0, tried:new Set()};
   $$('nav button').forEach((x,i) => x.classList.toggle('on', i===0));
   ['play','weak','hist'].forEach(t => $('#tab-'+t).classList.toggle('hidden', t !== 'play'));
   $('#setup').classList.add('hidden'); $('#results').classList.add('hidden'); $('#game').style.display='block';
@@ -571,7 +584,7 @@ function record(){
     if (bad) { s.box = 0; s.flags++; } else s.box = Math.min(5, (s.box||0) + 1);
     s.last = Date.now();
   }
-  G.log.push({key:p.key, text:p.short, ans:p.disp, op:p.op, dt, errs:G.errs, bad, review:p.review});
+  G.log.push({key:p.key, text:p.short, ans:p.disp, op:p.op, dt, at:G.t0 - G.start, errs:G.errs, bad, review:p.review});
 }
 function prune(){
   const e = Object.entries(state.stats);
@@ -621,6 +634,72 @@ function distChart(groups){
   return s + '</svg>';
 }
 
+/* ---------- round timeline + histogram ---------- */
+const OPCOLOR = {add:'#2f5bd3',sub:'#0f9d8a',mul:'#d9480f',div:'#b7791f',trig:'#8b5cf6',log:'#db2777',pow:'#0891b2',poly:'#65a30d',comb:'#78716c'};
+let lastRound = null;
+function timelineChart(g){
+  const log = g.log; if (!log.length) return '<div class="empty">No answers this round.</div>';
+  const thr = state.settings.thr*1000;
+  const dur = Math.max(state.settings.dur*1000, ...log.map(x => x.at + x.dt));
+  const span = g.full ? state.settings.dur*1000 : Math.max(...log.map(x => x.at + x.dt));
+  const ymax = Math.max(thr*1.4, Math.min(15000, Math.max(...log.map(x=>x.dt))));
+  const W = 720, H = 190, L = 34, R = 8, T = 8, B = 22;
+  const X = v => L + Math.min(v, span)/span*(W-L-R), Y = v => H-B - Math.min(v,ymax)/ymax*(H-B-T);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  const ystep = ymax <= 6000 ? 1000 : ymax <= 12000 ? 2000 : 5000;
+  for (let t = 0; t <= ymax; t += ystep) s += `<line x1="${L}" x2="${W-R}" y1="${Y(t)}" y2="${Y(t)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(t)+4}" text-anchor="end">${t/1000}s</text>`;
+  const xstep = span > 150000 ? 30000 : span > 60000 ? 20000 : 10000;
+  for (let t = 0; t <= span + 1; t += xstep) s += `<text x="${X(t)}" y="${H-6}" text-anchor="middle">${Math.round(t/1000)}s</text>`;
+  s += `<line x1="${L}" x2="${W-R}" y1="${Y(thr)}" y2="${Y(thr)}" stroke="var(--bad)" stroke-dasharray="4 3" opacity=".7"/>`;
+  log.forEach((x, i) => {
+    const x0 = X(x.at), w = Math.max(1.2, X(x.at + x.dt) - x0 - 0.8);
+    s += `<rect data-i="${i}" x="${x0}" y="${Y(x.dt)}" width="${w}" height="${Math.max(1, H-B-Y(x.dt))}" rx="1" fill="${OPCOLOR[x.op]}" opacity="${x.bad?1:.6}"><title>#${i+1} ${x.text} = ${x.ans} · ${fmt(x.dt)}</title></rect>`;
+  });
+  return s + `</svg><p class="hint">Each bar is one problem, placed where it started in the round. Its width and height are both the time you spent on it, so the bars together fill the round. Solid bars are flagged and faded bars were clean. The dashed line is your slow threshold.</p>`;
+}
+function histChart(g){
+  const log = g.log; if (!log.length) return '';
+  const BW = 500, cap = 10000;
+  const nb = Math.max(4, Math.ceil(Math.min(cap, Math.max(...log.map(x=>x.dt)) + 1)/BW));
+  g.nb = nb;
+  const bins = Array.from({length:nb}, () => []);
+  log.forEach((x,i) => bins[Math.min(nb-1, Math.floor(x.dt/BW))].push(i));
+  const ops = OPS.map(o=>o.id).filter(o => log.some(x=>x.op===o));
+  const maxc = Math.max(...bins.map(b=>b.length));
+  const W = 720, H = 170, L = 34, R = 8, T = 8, B = 22, bw = (W-L-R)/nb;
+  const Y = v => H-B - v/maxc*(H-B-T);
+  const thr = state.settings.thr*1000;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%">`;
+  const cstep = Math.max(1, Math.ceil(maxc/4));
+  for (let c = 0; c <= maxc; c += cstep) s += `<line x1="${L}" x2="${W-R}" y1="${Y(c)}" y2="${Y(c)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(c)+4}" text-anchor="end">${c}</text>`;
+  bins.forEach((b, k) => {
+    let acc = 0;
+    ops.forEach(op => { const n = b.filter(i => log[i].op === op).length; if (!n) return;
+      s += `<rect data-b="${k}" x="${L + k*bw + 1}" y="${Y(acc+n)}" width="${bw-2}" height="${Y(acc)-Y(acc+n)}" fill="${OPCOLOR[op]}" opacity=".8"><title>${(k*BW/1000).toFixed(1)}–${((k+1)*BW/1000).toFixed(1)}s: ${b.length} problems</title></rect>`; acc += n; });
+    if (k % 2 === 0) s += `<text x="${L + k*bw}" y="${H-6}" text-anchor="middle">${k*BW/1000}s</text>`;
+  });
+  const tx = L + thr/BW*bw;
+  if (thr < nb*BW) s += `<line x1="${tx}" x2="${tx}" y1="${T}" y2="${H-B}" stroke="var(--bad)" stroke-dasharray="4 3" opacity=".7"/>`;
+  return s + `</svg><p class="hint">Number of problems in each half-second bucket, colored by type${nb*BW>=cap?'. The last bucket holds everything 10 s and over':''}. Click a bar to list the problems in it.</p>`;
+}
+function showPick(html){ $('#rPick').innerHTML = html; }
+$('#results').addEventListener('click', e => {
+  const r = e.target.closest('rect[data-i],rect[data-b]'); if (!r || !lastRound) return;
+  $$('#results rect.sel').forEach(x => x.classList.remove('sel'));
+  const log = lastRound.log, thr = state.settings.thr*1000;
+  if (r.dataset.i !== undefined) {
+    r.classList.add('sel');
+    const i = +r.dataset.i, x = log[i];
+    showPick(`<div class="pt">${x.text} = ${x.ans}</div><div class="pm">#${i+1} of ${log.length} · ${OPNAME[x.op]} · <b class="${x.dt>thr?'slow':''}">${fmt(x.dt)}</b> · started at ${(x.at/1000).toFixed(1)}s${x.errs?` · <span class="slow">${x.errs} wrong ${x.errs>1?'tries':'try'}</span>`:''}${x.review?' · review problem':''}${x.bad?' · flagged':''}</div>`);
+  } else {
+    const k = +r.dataset.b;
+    $$(`#rHist rect[data-b="${k}"]`).forEach(x => x.classList.add('sel'));
+    const items = log.map((x,i)=>({...x,i})).filter(x => Math.min(lastRound.nb-1, Math.floor(x.dt/500)) === k);
+    showPick(`<div class="pm" style="margin:0 0 6px">${(k*.5).toFixed(1)}–${((k+1)*.5).toFixed(1)}s · ${items.length} problem${items.length===1?'':'s'}</div>` +
+      `<table>${items.map(x=>`<tr><td>${x.text}</td><td>${x.ans}</td><td class="txt" style="color:${OPCOLOR[x.op]}">${OPNAME[x.op]}</td><td class="${x.dt>thr?'slow':''}">${fmt(x.dt)}</td><td class="txt" style="color:var(--mute)">#${x.i+1}</td></tr>`).join('')}</table>`);
+  }
+});
+
 /* ---------- results ---------- */
 function showResults(g, full){
   $('#results').classList.remove('hidden');
@@ -639,6 +718,12 @@ function showResults(g, full){
   const rev = g.log.filter(x=>x.review);
   if (rev.length) { const clean = rev.filter(x=>!x.bad).length; html += `<div class="stat"><div>Review problems</div><div>${clean}/${rev.length} clean</div></div>`; }
   $('#rStats').innerHTML = html || '<div class="empty">No answers.</div>';
+  g.full = full; lastRound = g;
+  const used = OPS.map(o=>o.id).filter(o => g.log.some(x=>x.op===o));
+  $('#rLegend').innerHTML = used.map(o => `<span><i style="background:${OPCOLOR[o]}"></i>${OPNAME[o]}</span>`).join('');
+  $('#rTimeline').innerHTML = timelineChart(g);
+  $('#rHist').innerHTML = histChart(g);
+  showPick('<span style="color:var(--mute)">Click a bar to see which problem it was.</span>');
   $('#rDist').innerHTML = distChart(g.ops.map(op => ({label:OPNAME[op], arr:g.log.filter(x=>x.op===op).map(x=>x.dt)})));
   const fl = g.log.filter(x=>x.bad).sort((a,b)=>b.dt-a.dt);
   $('#rFlag').innerHTML = fl.length
