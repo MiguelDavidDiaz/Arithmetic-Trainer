@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Zeta Drill</title>
+<title>Arithmetic Trainer</title>
 <style>
 :root{
   --bg:#f6f5f2;--card:#fff;--ink:#1d1d1b;--mute:#6f6d66;--line:#e4e1da;
@@ -35,9 +35,13 @@ label.chk small{color:var(--mute)}
 label.hardchk:has(input:checked){border-color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent);color:var(--bad)}
 .field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mute)}
 select,input[type=number]{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
-input[type=number]{width:64px}
+input[type=number]{width:58px;text-align:center;-moz-appearance:textfield}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
 input[type=range]{accent-color:var(--acc);width:100%}
-.rng{display:flex;align-items:center;gap:6px;color:var(--ink);font-size:14px}
+.rng{display:flex;align-items:center;gap:6px;color:var(--mute);font-size:14px;flex-wrap:nowrap}
+.opsym{color:var(--ink);font-weight:600;margin:0 6px}
+.cardhead{display:flex;justify-content:space-between;align-items:baseline}
+.linkbtn{border:0;background:none;color:var(--acc);font:inherit;font-size:13px;cursor:pointer;padding:0}
 .btn{font:inherit;font-weight:600;border:0;border-radius:10px;padding:11px 18px;cursor:pointer;background:var(--acc);color:#fff}
 .btn.ghost{background:none;color:var(--acc);border:1px solid var(--line)}
 .btn.danger{background:none;color:var(--bad);border:1px solid var(--line)}
@@ -88,7 +92,7 @@ svg .lbl{fill:var(--ink);font-size:12px;font-weight:600}
 <body>
 <div class="wrap">
 <header>
-  <h1>Zeta Drill <span>· learns what you miss</span></h1>
+  <h1>Arithmetic Trainer</h1>
   <nav>
     <button data-tab="play" class="on">Play</button>
     <button data-tab="weak">Stats</button>
@@ -118,20 +122,19 @@ svg .lbl{fill:var(--ink);font-size:12px;font-weight:600}
         <button class="btn" id="start">Start round</button>
         <button class="btn ghost" id="startWeak">Weak-only drill</button>
       </div>
-      <p class="hint" id="setupHint">Answers submit automatically, like Zetamac. A problem goes on your weak list if you type a wrong answer or go over the slow threshold. It leaves the list after 3 fast, clean solves in a row. Esc ends a round.</p>
+      <p class="hint hidden" id="setupHint"></p>
       <p class="hint" id="hardHint">Hard mode answers can be exact values. Type <b>r3/2</b> for √3/2, <b>1/2</b> or <b>.5</b>, <b>u</b> for undefined, <b>-inf</b> for −∞, and press Enter to submit a guess.</p>
     </div>
     <div class="card">
-      <h2>Ranges</h2>
+      <div class="cardhead"><h2>Ranges</h2><button class="linkbtn" id="defaults">Reset</button></div>
       <div class="grid2">
-        <div class="field">Addition: (a) + (b)
-          <div class="rng">(<input type="number" id="a1" value="2">–<input type="number" id="a2" value="100">) + (<input type="number" id="b1" value="2">–<input type="number" id="b2" value="100">)</div>
+        <div class="field">Addition / Subtraction
+          <div class="rng"><input type="number" id="a1" value="2">–<input type="number" id="a2" value="100"><span class="opsym">+</span><input type="number" id="b1" value="2">–<input type="number" id="b2" value="100"></div>
         </div>
-        <div class="field">Multiplication: (a) × (b)
-          <div class="rng">(<input type="number" id="m1" value="2">–<input type="number" id="m2" value="12">) × (<input type="number" id="n1" value="2">–<input type="number" id="n2" value="100">)</div>
+        <div class="field">Multiplication / Division
+          <div class="rng"><input type="number" id="m1" value="2">–<input type="number" id="m2" value="12"><span class="opsym">×</span><input type="number" id="n1" value="2">–<input type="number" id="n2" value="100"></div>
         </div>
       </div>
-      <p class="hint">Subtraction and division are addition and multiplication run in reverse. <button class="btn ghost" id="defaults" style="padding:4px 10px;font-size:13px">Reset to Zetamac defaults</button></p>
     </div>
   </div>
 
@@ -528,7 +531,7 @@ function startRound(weakOnly){
   next(); tick();
   const inp = $('#answer'); inp.value=''; inp.focus();
 }
-function alertInline(msg){ const h = $('#setupHint'); const old = h.dataset.orig || h.textContent; h.dataset.orig = old; h.textContent = msg; h.style.color='var(--bad)'; setTimeout(()=>{h.textContent=old;h.style.color='';},3500); }
+function alertInline(msg){ const h = $('#setupHint'); h.textContent = msg; h.style.color='var(--bad)'; h.classList.remove('hidden'); clearTimeout(h._t); h._t = setTimeout(()=>h.classList.add('hidden'),3500); }
 function next(){
   let p = null, review = false;
   if (G.weakOnly || Math.random()*100 < REVIEW_MIX) { p = pickWeak(G.ops, G.recent); review = !!p; }
@@ -801,7 +804,7 @@ function renderHist(){
 $('#exportBtn').addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(state)], {type:'application/json'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = 'zeta-drill-' + new Date().toISOString().slice(0,10) + '.json';
+  a.download = 'arithmetic-trainer-' + new Date().toISOString().slice(0,10) + '.json';
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 });
 $('#importFile').addEventListener('change', async e => {
@@ -811,7 +814,7 @@ $('#importFile').addEventListener('change', async e => {
     if (!d || d.v !== 1) throw 0;
     state = normalize(d); save(); loadSettingsUI(); renderHist();
     $('#ioMsg').textContent = 'Imported ' + Object.keys(state.stats).length + ' tracked problems and ' + state.hist.length + ' rounds.';
-  } catch(err) { $('#ioMsg').textContent = "That file doesn't look like a Zeta Drill export."; }
+  } catch(err) { $('#ioMsg').textContent = "That file doesn't look like an Arithmetic Trainer export."; }
   e.target.value = '';
 });
 
