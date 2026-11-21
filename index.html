@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zeta Drill</title>
+<style>
+:root{
+  --bg:#f6f5f2;--card:#fff;--ink:#1d1d1b;--mute:#6f6d66;--line:#e4e1da;
+  --acc:#2f5bd3;--acc-soft:#e6ecfb;--good:#1f8a4c;--bad:#c2412d;--warn:#b7791f;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#141413;--card:#1e1e1c;--ink:#eceae4;--mute:#9a978e;--line:#33322e;
+  --acc:#7d9cf0;--acc-soft:#232a3d;--good:#4cc283;--bad:#ef7a66;--warn:#e2b04f;
+}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:18px 16px 60px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+h1{font-size:19px;margin:0;letter-spacing:-.01em}
+h1 span{color:var(--mute);font-weight:500}
+nav{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px}
+nav button{border:0;background:none;color:var(--mute);padding:6px 12px;border-radius:7px;font:inherit;cursor:pointer}
+nav button.on{background:var(--acc-soft);color:var(--acc);font-weight:600}
+.sync{font-size:12px;color:var(--mute);width:100%}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+.card h2{font-size:14px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px}
+label.chk{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;cursor:pointer;user-select:none}
+label.chk input{accent-color:var(--acc)}
+.field{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mute)}
+select,input[type=number]{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+input[type=number]{width:64px}
+input[type=range]{accent-color:var(--acc);width:100%}
+.rng{display:flex;align-items:center;gap:6px;color:var(--ink);font-size:14px}
+.btn{font:inherit;font-weight:600;border:0;border-radius:10px;padding:11px 18px;cursor:pointer;background:var(--acc);color:#fff}
+.btn.ghost{background:none;color:var(--acc);border:1px solid var(--line)}
+.btn.danger{background:none;color:var(--bad);border:1px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:default}
+.hint{font-size:13px;color:var(--mute);margin:8px 0 0}
+#game{display:none;text-align:center}
+.hud{display:flex;justify-content:space-between;font-family:var(--mono);font-size:15px;color:var(--mute);margin-bottom:28px}
+.hud b{color:var(--ink);font-size:18px}
+.prob{font-family:var(--mono);font-size:clamp(38px,9vw,60px);font-weight:600;letter-spacing:-.02em;min-height:1.3em}
+.badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);height:16px;margin-bottom:6px}
+#answer{font-family:var(--mono);font-size:34px;text-align:center;width:min(240px,80%);margin:22px auto 10px;display:block;padding:10px;border:2px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);outline:none}
+#answer:focus{border-color:var(--acc)}
+#answer.wrong{border-color:var(--bad)}
+.big{font-family:var(--mono);font-size:56px;font-weight:700;line-height:1}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin:16px 0}
+.stat{border:1px solid var(--line);border-radius:10px;padding:10px}
+.stat div:first-child{font-size:12px;color:var(--mute)}
+.stat div:last-child{font-family:var(--mono);font-size:18px;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:12px;color:var(--mute);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:7px 8px;border-bottom:1px solid var(--line);font-family:var(--mono)}
+td.txt{font-family:inherit}
+.heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px}
+.cell{border-radius:10px;padding:8px;border:1px solid var(--line);text-align:center}
+.cell .k{font-size:12px;color:var(--mute)}
+.cell .v{font-family:var(--mono);font-size:16px;font-weight:600}
+.cell .s{font-size:11px;color:var(--mute)}
+.dots span{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--line);margin-right:2px}
+.dots span.f{background:var(--good)}
+.empty{color:var(--mute);font-size:14px;padding:10px 0}
+.slow{color:var(--bad)}
+.ok{color:var(--good)}
+svg text{fill:var(--mute);font-size:11px;font-family:var(--mono)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Zeta Drill <span>· learns what you miss</span></h1>
+  <nav>
+    <button data-tab="play" class="on">Play</button>
+    <button data-tab="weak">Weak spots</button>
+    <button data-tab="hist">History</button>
+  </nav>
+  <div class="sync" id="sync">Progress is saved in this browser. Use Export / Import on the History tab to move it between devices.</div>
+</header>
+
+<!-- PLAY -->
+<section id="tab-play">
+  <div id="setup">
+    <div class="card">
+      <h2>Round</h2>
+      <div class="row" style="margin-bottom:14px">
+        <label class="chk"><input type="checkbox" data-op="add" checked> Addition</label>
+        <label class="chk"><input type="checkbox" data-op="sub" checked> Subtraction</label>
+        <label class="chk"><input type="checkbox" data-op="mul" checked> Multiplication</label>
+        <label class="chk"><input type="checkbox" data-op="div" checked> Division</label>
+      </div>
+      <div class="grid2">
+        <div class="field">Duration
+          <select id="dur"><option value="60">60 s</option><option value="120" selected>120 s (Zetamac)</option><option value="180">180 s</option><option value="300">300 s</option></select>
+        </div>
+        <div class="field">Counts as "slow" after
+          <select id="thr"><option value="2">2.0 s</option><option value="2.5">2.5 s</option><option value="3" selected>3.0 s</option><option value="4">4.0 s</option><option value="5">5.0 s</option></select>
+        </div>
+        <div class="field">Review mix: <b id="mixv" style="color:var(--ink)">35%</b> of problems from your weak list
+          <input type="range" id="mix" min="0" max="80" step="5" value="35">
+        </div>
+      </div>
+      <div class="row" style="margin-top:18px">
+        <button class="btn" id="start">Start round</button>
+        <button class="btn ghost" id="startWeak">Weak-only drill</button>
+      </div>
+      <p class="hint">Answers submit automatically, like Zetamac. A problem goes on your weak list if you type a wrong answer or go over the slow threshold. It leaves the list after 3 fast, clean solves in a row. Esc ends a round.</p>
+    </div>
+    <div class="card">
+      <h2>Ranges</h2>
+      <div class="grid2">
+        <div class="field">Addition: (a) + (b)
+          <div class="rng">(<input type="number" id="a1" value="2">–<input type="number" id="a2" value="100">) + (<input type="number" id="b1" value="2">–<input type="number" id="b2" value="100">)</div>
+        </div>
+        <div class="field">Multiplication: (a) × (b)
+          <div class="rng">(<input type="number" id="m1" value="2">–<input type="number" id="m2" value="12">) × (<input type="number" id="n1" value="2">–<input type="number" id="n2" value="100">)</div>
+        </div>
+      </div>
+      <p class="hint">Subtraction and division are addition and multiplication run in reverse. <button class="btn ghost" id="defaults" style="padding:4px 10px;font-size:13px">Reset to Zetamac defaults</button></p>
+    </div>
+  </div>
+
+  <div id="game" class="card">
+    <div class="hud"><span>Score <b id="score">0</b></span><span id="modeLbl"></span><span>Time <b id="time">120</b></span></div>
+    <div class="badge" id="badge"></div>
+    <div class="prob" id="prob"></div>
+    <input id="answer" inputmode="numeric" autocomplete="off" autocorrect="off" spellcheck="false">
+    <button class="btn ghost" id="quit" style="margin-top:14px">End round</button>
+  </div>
+
+  <div id="results" class="card hidden">
+    <h2>Result</h2>
+    <div class="row" style="align-items:flex-end;gap:16px"><div class="big" id="rScore">0</div><div id="rNote" style="color:var(--mute);padding-bottom:6px"></div></div>
+    <div class="stats" id="rStats"></div>
+    <h2 style="margin-top:18px">Flagged this round</h2>
+    <div id="rFlag"></div>
+    <div class="row" style="margin-top:16px">
+      <button class="btn" id="again">Play again</button>
+      <button class="btn ghost" id="drillNow">Drill weak list</button>
+      <button class="btn ghost" id="toSetup">Settings</button>
+    </div>
+  </div>
+</section>
+
+<!-- WEAK -->
+<section id="tab-weak" class="hidden">
+  <div class="card">
+    <h2>Average time by fact family</h2>
+    <div class="heat" id="heat"></div>
+    <p class="hint">Multiplication and division are grouped by the small factor (2–12). The redder the cell, the slower you are compared with your slow threshold.</p>
+  </div>
+  <div class="card">
+    <h2>Weak list <span id="weakCount" style="text-transform:none;letter-spacing:0"></span></h2>
+    <div id="weakList"></div>
+    <div class="row" style="margin-top:14px">
+      <button class="btn" id="drillBtn">Drill these</button>
+      <button class="btn danger" id="resetBtn">Reset all data</button>
+    </div>
+  </div>
+</section>
+
+<!-- HISTORY -->
+<section id="tab-hist" class="hidden">
+  <div class="card">
+    <h2>Scores (120 s rounds)</h2>
+    <div id="chart"></div>
+  </div>
+  <div class="card">
+    <h2>Recent rounds</h2>
+    <div id="histList"></div>
+  </div>
+  <div class="card">
+    <h2>Move your data</h2>
+    <div class="row">
+      <button class="btn ghost" id="exportBtn">Export progress (.json)</button>
+      <label class="btn ghost" style="display:inline-block">Import progress<input type="file" id="importFile" accept="application/json,.json" hidden></label>
+    </div>
+    <p class="hint" id="ioMsg">Your weak list and history live in this browser's storage. Export on one device and import on another to carry them over.</p>
+  </div>
+</section>
+</div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const LS_KEY = 'zetadrill.v1';
+const DEF = {ops:{add:true,sub:true,mul:true,div:true},dur:120,thr:3,mix:35,a1:2,a2:100,b1:2,b2:100,m1:2,m2:12,n1:2,n2:100};
+const MAX_ENTRIES = 500, GRAD = 3;
+
+let state = {v:1, updated:0, settings:{...DEF}, stats:{}, cats:{}, hist:[]};
+try { const raw = localStorage.getItem(LS_KEY); if (raw) state = normalize(JSON.parse(raw)); } catch(e) {}
+
+function normalize(s){
+  s = s || {};
+  return {v:1, updated:s.updated||0, settings:{...DEF, ...(s.settings||{}), ops:{...DEF.ops, ...((s.settings||{}).ops||{})}},
+          stats:s.stats||{}, cats:s.cats||{}, hist:Array.isArray(s.hist)?s.hist:[]};
+}
+
+/* ---------- storage ---------- */
+function save(){
+  state.updated = Date.now();
+  try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+/* ---------- settings UI ---------- */
+const numIds = ['a1','a2','b1','b2','m1','m2','n1','n2'];
+function loadSettingsUI(){
+  const s = state.settings;
+  $$('[data-op]').forEach(c => c.checked = !!s.ops[c.dataset.op]);
+  $('#dur').value = String(s.dur); $('#thr').value = String(s.thr);
+  $('#mix').value = s.mix; $('#mixv').textContent = s.mix + '%';
+  numIds.forEach(k => $('#'+k).value = s[k]);
+}
+function readSettingsUI(){
+  const s = state.settings;
+  $$('[data-op]').forEach(c => s.ops[c.dataset.op] = c.checked);
+  s.dur = +$('#dur').value; s.thr = +$('#thr').value; s.mix = +$('#mix').value;
+  numIds.forEach(k => { const v = parseInt($('#'+k).value, 10); s[k] = isNaN(v) ? DEF[k] : v; });
+  [['a1','a2'],['b1','b2'],['m1','m2'],['n1','n2']].forEach(([lo,hi]) => { if (s[lo] > s[hi]) [s[lo], s[hi]] = [s[hi], s[lo]]; });
+}
+$('#mix').addEventListener('input', e => $('#mixv').textContent = e.target.value + '%');
+$('#defaults').addEventListener('click', () => { state.settings = {...DEF, ops:{...state.settings.ops}}; loadSettingsUI(); save(); });
+['change'].forEach(ev => $('#setup').addEventListener(ev, () => { readSettingsUI(); save(); }));
+
+/* ---------- problems ---------- */
+const ri = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const opOf = k => ({a:'add', s:'sub', m:'mul', d:'div'})[k[0]];
+function fromKey(key){
+  const body = key.slice(2);
+  if (key[0] === 'a') { let [x,y] = body.split(',').map(Number); if (Math.random()<.5) [x,y]=[y,x]; return {key, op:'add', text:`${x} + ${y}`, ans:x+y, cat:'add'}; }
+  if (key[0] === 's') { const [c,a] = body.split('-').map(Number); return {key, op:'sub', text:`${c} − ${a}`, ans:c-a, cat:'sub'}; }
+  if (key[0] === 'm') { let [a,b] = body.split('x').map(Number); const small = a; if (Math.random()<.5) [a,b]=[b,a]; return {key, op:'mul', text:`${a} × ${b}`, ans:a*b, cat:'m'+small}; }
+  const [p,q] = body.split('/').map(Number); const ans = p/q; const small = Math.min(q, ans);
+  return {key, op:'div', text:`${p} ÷ ${q}`, ans, cat:'d'+(small<=12?small:Math.min(q,ans))};
+}
+function gen(op){
+  const s = state.settings;
+  if (op === 'add') { const x = ri(s.a1,s.a2), y = ri(s.b1,s.b2); return fromKey(`a:${Math.min(x,y)},${Math.max(x,y)}`); }
+  if (op === 'sub') { const x = ri(s.a1,s.a2), y = ri(s.b1,s.b2); return fromKey(`s:${x+y}-${x}`); }
+  const a = ri(s.m1,s.m2), b = ri(s.n1,s.n2);
+  if (op === 'mul') return fromKey(`m:${a}x${b}`);
+  return fromKey(Math.random()<.6 ? `d:${a*b}/${a}` : `d:${a*b}/${b}`);
+}
+function weakEntries(ops){
+  return Object.entries(state.stats).filter(([k,v]) => (v.box||0) < GRAD && ops.includes(opOf(k)));
+}
+function pickWeak(ops, recent){
+  const c = weakEntries(ops).filter(([k]) => !recent.includes(k));
+  if (!c.length) return null;
+  const thr = state.settings.thr*1000;
+  const w = c.map(([k,v]) => (GRAD - (v.box||0)) * (1 + (v.err||0)/Math.max(v.n||1,1)) * Math.min(3, Math.max(.6, (v.t||thr)/thr)));
+  let r = Math.random() * w.reduce((a,b)=>a+b,0);
+  for (let i=0;i<c.length;i++){ r -= w[i]; if (r <= 0) return fromKey(c[i][0]); }
+  return fromKey(c[c.length-1][0]);
+}
+
+/* ---------- game ---------- */
+let G = null;
+function startRound(weakOnly){
+  readSettingsUI(); save();
+  const ops = Object.keys(state.settings.ops).filter(k => state.settings.ops[k]);
+  if (!ops.length) { $('.hint').textContent = 'Pick at least one operation.'; return; }
+  if (weakOnly && !weakEntries(ops).length) { alertInline('Your weak list is empty for these operations. Play a normal round first.'); return; }
+  G = {weakOnly, ops, score:0, end:performance.now() + state.settings.dur*1000, recent:[], log:[], cur:null, t0:0, errs:0, tried:new Set()};
+  $('#setup').classList.add('hidden'); $('#results').classList.add('hidden'); $('#game').style.display='block';
+  $('#modeLbl').textContent = weakOnly ? 'weak-only' : `review ${state.settings.mix}%`;
+  $('#score').textContent = '0';
+  next(); tick();
+  const inp = $('#answer'); inp.value=''; inp.focus();
+}
+function alertInline(msg){ const h = $('#setup .hint'); const old = h.dataset.orig || h.textContent; h.dataset.orig = old; h.textContent = msg; h.style.color='var(--bad)'; setTimeout(()=>{h.textContent=old;h.style.color='';},3500); }
+function next(){
+  let p = null, review = false;
+  if (G.weakOnly || Math.random()*100 < state.settings.mix) { p = pickWeak(G.ops, G.recent); review = !!p; }
+  if (!p) { for (let i=0;i<5;i++){ p = gen(G.ops[ri(0,G.ops.length-1)]); if (!G.recent.includes(p.key)) break; } }
+  G.cur = p; G.cur.review = review; G.t0 = performance.now(); G.errs = 0; G.tried = new Set();
+  G.recent.push(p.key); if (G.recent.length > 6) G.recent.shift();
+  $('#prob').textContent = p.text;
+  $('#badge').textContent = review ? 'review' : '';
+  $('#answer').classList.remove('wrong');
+}
+function tick(){
+  if (!G) return;
+  const left = Math.max(0, (G.end - performance.now())/1000);
+  $('#time').textContent = Math.ceil(left);
+  if (left <= 0) return finish(false);
+  G.timer = setTimeout(tick, 100);
+}
+$('#answer').addEventListener('input', e => {
+  if (!G) return;
+  const v = e.target.value.replace(/[^0-9]/g,''); e.target.value = v;
+  const a = String(G.cur.ans);
+  if (v === a) { record(true); G.score++; $('#score').textContent = G.score; e.target.value=''; next(); return; }
+  if (v.length >= a.length && !G.tried.has(v)) { G.tried.add(v); G.errs++; e.target.classList.add('wrong'); }
+  else if (v.length < a.length) e.target.classList.remove('wrong');
+});
+function record(){
+  const p = G.cur, dt = performance.now() - G.t0, thr = state.settings.thr*1000;
+  const bad = dt > thr || G.errs > 0;
+  const c = state.cats[p.cat] || (state.cats[p.cat] = {n:0, t:0, bad:0});
+  c.n++; c.t = c.n === 1 ? dt : c.t*0.85 + dt*0.15; if (bad) c.bad++;
+  let s = state.stats[p.key];
+  if (bad || s) {
+    s = s || (state.stats[p.key] = {n:0, err:0, flags:0, t:0, box:0});
+    s.n++; s.t = s.n === 1 ? dt : s.t*0.5 + dt*0.5; if (G.errs) s.err++;
+    if (bad) { s.box = 0; s.flags++; } else s.box = Math.min(5, (s.box||0) + 1);
+    s.last = Date.now();
+  }
+  G.log.push({key:p.key, text:p.text, ans:p.ans, op:p.op, dt, errs:G.errs, bad, review:p.review});
+}
+function prune(){
+  const e = Object.entries(state.stats);
+  if (e.length <= MAX_ENTRIES) return;
+  e.sort((a,b) => ((b[1].box||0) - (a[1].box||0)) || ((a[1].last||0) - (b[1].last||0)));
+  for (const [k,v] of e) { if (Object.keys(state.stats).length <= MAX_ENTRIES) break; if ((v.box||0) >= GRAD) delete state.stats[k]; }
+}
+function finish(quit){
+  clearTimeout(G.timer);
+  const g = G; G = null;
+  $('#game').style.display='none';
+  const full = !quit;
+  if (full) state.hist.push({ts:Date.now(), score:g.score, dur:state.settings.dur, ops:g.ops.join(''), weak:g.weakOnly, mix:state.settings.mix});
+  if (state.hist.length > 300) state.hist = state.hist.slice(-300);
+  prune(); save();
+  showResults(g, full);
+}
+$('#quit').addEventListener('click', () => G && finish(true));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && G) finish(true); });
+
+function fmt(ms){ return (ms/1000).toFixed(1) + 's'; }
+function showResults(g, full){
+  $('#results').classList.remove('hidden');
+  $('#rScore').textContent = g.score;
+  const same = state.hist.filter(h => h.dur === state.settings.dur && !h.weak && h.ops === g.ops.join(''));
+  const best = same.length ? Math.max(...same.map(h=>h.score)) : g.score;
+  $('#rNote').textContent = !full ? 'ended early, not logged' : g.weakOnly ? 'weak-only drill' : (g.score >= best && same.length > 1 ? 'new best' : `best ${best}`);
+  const byOp = {add:'Add',sub:'Sub',mul:'Mul',div:'Div'};
+  const thr = state.settings.thr*1000;
+  let html = '';
+  for (const op of g.ops) {
+    const l = g.log.filter(x => x.op === op); if (!l.length) continue;
+    const avg = l.reduce((a,b)=>a+b.dt,0)/l.length;
+    html += `<div class="stat"><div>${byOp[op]} · ${l.length}</div><div class="${avg>thr?'slow':''}">${fmt(avg)}</div></div>`;
+  }
+  const rev = g.log.filter(x=>x.review);
+  if (rev.length) { const clean = rev.filter(x=>!x.bad).length; html += `<div class="stat"><div>Review problems</div><div>${clean}/${rev.length} clean</div></div>`; }
+  $('#rStats').innerHTML = html || '<div class="empty">No answers.</div>';
+  const fl = g.log.filter(x=>x.bad).sort((a,b)=>b.dt-a.dt);
+  $('#rFlag').innerHTML = fl.length
+    ? `<table><tr><th>Problem</th><th>Answer</th><th>Time</th><th>Wrong tries</th></tr>${fl.slice(0,15).map(x=>`<tr><td>${x.text}</td><td>${x.ans}</td><td class="${x.dt>thr?'slow':''}">${fmt(x.dt)}</td><td class="${x.errs?'slow':''}">${x.errs||'–'}</td></tr>`).join('')}</table>${fl.length>15?`<p class="hint">+${fl.length-15} more on the weak list</p>`:''}`
+    : '<div class="empty">Nothing flagged. Every answer was clean and under the threshold.</div>';
+  $('#again').focus();
+}
+$('#start').addEventListener('click', () => startRound(false));
+$('#startWeak').addEventListener('click', () => startRound(true));
+$('#again').addEventListener('click', () => startRound(false));
+$('#drillNow').addEventListener('click', () => startRound(true));
+$('#toSetup').addEventListener('click', () => { $('#results').classList.add('hidden'); $('#setup').classList.remove('hidden'); });
+
+/* ---------- tabs ---------- */
+$$('nav button').forEach(b => b.addEventListener('click', () => {
+  if (G) return;
+  $$('nav button').forEach(x => x.classList.toggle('on', x===b));
+  ['play','weak','hist'].forEach(t => $('#tab-'+t).classList.toggle('hidden', t !== b.dataset.tab));
+  if (b.dataset.tab === 'weak') renderWeak();
+  if (b.dataset.tab === 'hist') renderHist();
+}));
+
+/* ---------- weak view ---------- */
+function heatColor(ms){
+  const thr = state.settings.thr*1000, r = Math.max(0, Math.min(1, (ms - thr*0.4)/(thr*1.1)));
+  return `hsla(${Math.round(130 - 125*r)},65%,50%,.18)`;
+}
+function renderWeak(){
+  const cats = state.cats;
+  const order = ['add','sub', ...Array.from({length:11},(_,i)=>'m'+(i+2)), ...Array.from({length:11},(_,i)=>'d'+(i+2))];
+  const name = k => k==='add'?'+':k==='sub'?'−':(k[0]==='m'?'×':'÷')+k.slice(1);
+  const cells = order.filter(k => cats[k] && cats[k].n).map(k => { const c = cats[k];
+    return `<div class="cell" style="background:${heatColor(c.t)}"><div class="k">${name(k)}</div><div class="v">${fmt(c.t)}</div><div class="s">${Math.round(100*c.bad/c.n)}% flagged · ${c.n}</div></div>`; });
+  $('#heat').innerHTML = cells.length ? cells.join('') : '<div class="empty">Play a round to see this.</div>';
+  const w = Object.entries(state.stats).filter(([,v]) => (v.box||0) < GRAD)
+    .sort((a,b) => (b[1].flags - a[1].flags) || (b[1].t - a[1].t));
+  $('#weakCount').textContent = w.length ? `· ${w.length}` : '';
+  const thr = state.settings.thr*1000;
+  $('#weakList').innerHTML = w.length
+    ? `<table><tr><th>Problem</th><th>Ans</th><th>Avg</th><th>Flagged</th><th>Clean streak</th></tr>${w.slice(0,40).map(([k,v]) => { const p = fromKey(k);
+        return `<tr><td>${p.text}</td><td>${p.ans}</td><td class="${v.t>thr?'slow':''}">${fmt(v.t)}</td><td>${v.flags}${v.err?` <span class="slow" title="rounds with a wrong answer">(${v.err}✗)</span>`:''}</td><td class="dots">${Array.from({length:GRAD},(_,i)=>`<span class="${i<(v.box||0)?'f':''}"></span>`).join('')}</td></tr>`; }).join('')}</table>${w.length>40?`<p class="hint">Showing 40 of ${w.length}.</p>`:''}`
+    : '<div class="empty">No weak problems yet.</div>';
+  $('#drillBtn').disabled = !w.length;
+}
+$('#drillBtn').addEventListener('click', () => { $$('nav button')[0].click(); startRound(true); });
+let resetArm = 0;
+$('#resetBtn').addEventListener('click', e => {
+  if (Date.now() - resetArm < 4000) {
+    state = normalize({settings:state.settings}); save(); renderWeak(); e.target.textContent = 'Reset all data'; resetArm = 0;
+  } else { resetArm = Date.now(); e.target.textContent = 'Click again to confirm'; setTimeout(() => e.target.textContent = 'Reset all data', 4000); }
+});
+
+/* ---------- history view ---------- */
+function renderHist(){
+  const h = state.hist.filter(x => x.dur === 120 && !x.weak).slice(-60);
+  if (h.length < 2) { $('#chart').innerHTML = '<div class="empty">Play two or more 120-second rounds to see a trend.</div>'; }
+  else {
+    const W = 680, H = 200, P = 28, ys = h.map(x=>x.score), mn = Math.max(0, Math.min(...ys)-5), mx = Math.max(...ys)+5;
+    const X = i => P + i*(W-2*P)/(h.length-1), Y = v => H-P - (v-mn)*(H-2*P)/(mx-mn||1);
+    const pts = h.map((x,i)=>`${X(i).toFixed(1)},${Y(x.score).toFixed(1)}`).join(' ');
+    const avg = []; h.forEach((x,i) => { const s = h.slice(Math.max(0,i-4), i+1); avg.push(s.reduce((a,b)=>a+b.score,0)/s.length); });
+    const apts = avg.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+    const ticks = [mn, Math.round((mn+mx)/2), mx].map(v => `<text x="2" y="${Y(v)+4}">${Math.round(v)}</text><line x1="${P}" x2="${W-P}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/>`).join('');
+    $('#chart').innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%">${ticks}<polyline points="${pts}" fill="none" stroke="var(--line)" stroke-width="1.5"/>${h.map((x,i)=>`<circle cx="${X(i)}" cy="${Y(x.score)}" r="2.5" fill="var(--mute)"/>`).join('')}<polyline points="${apts}" fill="none" stroke="var(--acc)" stroke-width="2.5"/></svg><p class="hint">Dots are individual rounds and the blue line is a 5-round moving average. Best: <b>${Math.max(...ys)}</b>. Last 5 average: <b>${avg[avg.length-1].toFixed(1)}</b>.</p>`;
+  }
+  const r = state.hist.slice(-20).reverse();
+  const opn = s => s.replace('add','+').replace('sub','−').replace('mul','×').replace('div','÷');
+  $('#histList').innerHTML = r.length
+    ? `<table><tr><th>When</th><th>Score</th><th>Length</th><th>Ops</th><th>Mode</th></tr>${r.map(x=>`<tr><td class="txt">${new Date(x.ts).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</td><td>${x.score}</td><td>${x.dur}s</td><td>${opn(x.ops)}</td><td class="txt">${x.weak?'weak-only':'review '+(x.mix??0)+'%'}</td></tr>`).join('')}</table>`
+    : '<div class="empty">No rounds yet.</div>';
+}
+
+$('#exportBtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state, null, 1)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'zeta-drill-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+$('#importFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!d || d.v !== 1) throw 0;
+    state = normalize(d); save(); loadSettingsUI(); renderHist();
+    $('#ioMsg').textContent = 'Imported ' + Object.keys(state.stats).length + ' tracked problems and ' + state.hist.length + ' rounds.';
+  } catch(err) { $('#ioMsg').textContent = "That file doesn't look like a Zeta Drill export."; }
+  e.target.value = '';
+});
+
+loadSettingsUI();
+})();
+</script>
+</body>
+</html>
