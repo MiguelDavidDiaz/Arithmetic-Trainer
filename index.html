@@ -86,6 +86,15 @@ svg .lbl{fill:var(--ink);font-size:12px;font-weight:600}
 .clickable rect.sel{stroke:var(--ink);stroke-width:2}
 .pick{margin-top:10px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;min-height:44px;background:var(--bg)}
 .pick .pt{font-family:var(--mono);font-size:18px;font-weight:600}
+.h2note{text-transform:none;letter-spacing:0;font-weight:500}
+tr[data-key]{cursor:pointer}
+tr[data-key]:hover td,tr.open td{background:var(--acc-soft)}
+tr.mrow td{padding:0 8px 10px;background:var(--acc-soft);font-family:inherit}
+.method{border-left:3px solid var(--acc);padding:8px 12px;margin-top:10px;background:var(--card);border-radius:0 8px 8px 0}
+tr.mrow .method{margin-top:0}
+.method .mt{font-weight:600;font-size:13px;color:var(--acc);margin-bottom:4px}
+.method ol{margin:0;padding-left:20px;font-family:var(--mono);font-size:14px;line-height:1.7}
+.method .mtip{font-size:13px;color:var(--mute);margin-top:4px}
 .pick .pm{color:var(--mute);font-size:13px;margin-top:2px}
 </style>
 </head>
@@ -163,7 +172,7 @@ svg .lbl{fill:var(--ink);font-size:12px;font-weight:600}
       <div id="rDist"></div>
     </div>
     <div class="card">
-      <h2>Flagged this round</h2>
+      <h2>Flagged this round <span class="h2note">· tap a problem for the fastest way</span></h2>
       <div id="rFlag"></div>
       <div class="row" style="margin-top:16px">
         <button class="btn" id="again">Play again</button>
@@ -187,7 +196,7 @@ svg .lbl{fill:var(--ink);font-size:12px;font-weight:600}
     <p class="hint">Multiplication and division are grouped by the small factor (2–12). The redder the cell, the slower you are compared with your slow threshold.</p>
   </div>
   <div class="card">
-    <h2>Weak list <span id="weakCount" style="text-transform:none;letter-spacing:0"></span></h2>
+    <h2>Weak list <span id="weakCount" class="h2note"></span> <span class="h2note">· tap a problem for the fastest way</span></h2>
     <div id="weakList"></div>
     <div class="row" style="margin-top:14px">
       <button class="btn" id="drillBtn">Drill these</button>
@@ -636,6 +645,191 @@ function distChart(groups){
   return s + '</svg>';
 }
 
+/* ---------- fastest-method engine ---------- */
+const N = n => String(n).replace('-', '−');
+const P = n => n < 0 ? `(${N(n)})` : String(n);
+const ceil10 = n => Math.ceil(n/10)*10;
+const UNSUB = s => s.replace(/[₀-₉]/g, c => String('₀₁₂₃₄₅₆₇₈₉'.indexOf(c)));
+const CUBE_END = {0:0,1:1,2:8,3:7,4:4,5:5,6:6,7:3,8:2,9:9};
+function method(key){
+  const t = key[0], b = key.slice(2);
+  try {
+    if (t === 'a') return mAdd(...b.split(',').map(Number));
+    if (t === 's') { const [c,a] = b.split('-').map(Number); return mSub(c, a); }
+    if (t === 'm') { const [x,y] = b.split('x').map(Number); return mMul(Math.min(x,y), Math.max(x,y)); }
+    if (t === 'd') { const [p,q] = b.split('/').map(Number); return mDiv(p, q); }
+    if (t === 't') { const [fn,d,u] = b.split(','); return mTrig(fn, +d, u); }
+    if (t === 'l') return mLog(+b);
+    if (t === 'x') return mPow(b);
+    if (t === 'p') return mPoly(b);
+    if (t === 'c') return mComb(b);
+  } catch(e) {}
+  return null;
+}
+function mAdd(x, y){
+  const ans = x + y;
+  const near = [x, y].filter(n => n > 10 && n % 10 >= 7).sort((a,b) => b%10 - a%10)[0];
+  if (near) {
+    const o = near === y ? x : y, r = ceil10(near), d = r - near;
+    return {title:'Round up, then take back', steps:[`${o} + ${near} → ${o} + ${r} − ${d}`, `${o} + ${r} = ${o+r}`, `${o+r} − ${d} = ${ans}`],
+            tip:`${near} is ${d} short of ${r}, and adding a round number is one step.`};
+  }
+  const big = Math.max(x,y), sm = Math.min(x,y), tens = sm - sm%10, ones = sm%10;
+  if (!tens) return {title:'Add the ones', steps:[`${big} + ${sm} = ${ans}`], tip:'Bridge through the next ten if the ones carry.'};
+  return {title:'Add tens, then ones (left to right)', steps: ones ? [`${big} + ${tens} = ${big+tens}`, `${big+tens} + ${ones} = ${ans}`] : [`${big} + ${tens} = ${ans}`],
+          tip:'Working left to right lets you start typing the leading digits sooner.'};
+}
+function mSub(c, a){
+  const ans = c - a;
+  if (ans <= 20 && ceil10(a) <= c) {
+    const r = ceil10(a);
+    return {title:'Count up from the smaller number', steps:[`${a} → ${r} is ${r-a}`, `${r} → ${c} is ${c-r}`, `${r-a} + ${c-r} = ${ans}`],
+            tip:'When the two numbers are close, the gap is quicker to count than to subtract.'};
+  }
+  if (a % 10 >= 7) {
+    const r = ceil10(a), d = r - a;
+    return {title:'Subtract a round number, add back', steps:[`${c} − ${a} → ${c} − ${r} + ${d}`, `${c} − ${r} = ${c-r}`, `${c-r} + ${d} = ${ans}`],
+            tip:`You took away ${d} too many, so give it back.`};
+  }
+  const tens = a - a%10, ones = a%10;
+  return {title:'Subtract tens, then ones', steps: ones ? [`${c} − ${tens} = ${c-tens}`, `${c-tens} − ${ones} = ${ans}`] : [`${c} − ${tens} = ${ans}`]};
+}
+function mMul(s, L){
+  const ans = s*L;
+  if (L <= 12) return {title:'Times table', steps:[`${s} × ${L} = ${ans}`], tip:'This should be instant. If it isn\'t, drill this fact until it is.'};
+  if (s === 2) return {title:'Double', steps:[`${L} + ${L} = ${ans}`]};
+  if (s === 5) return {title:'×10, then halve', steps:[`${L} × 10 = ${L*10}`, `${L*10} ÷ 2 = ${ans}`]};
+  if (s === 10) return {title:'Add a zero', steps:[`${L} → ${ans}`]};
+  if (s === 9) return {title:'×10, minus one copy', steps:[`${L} × 10 = ${L*10}`, `${L*10} − ${L} = ${ans}`]};
+  if (s === 11 && L < 100) {
+    const d1 = Math.floor(L/10), d2 = L%10, sm = d1 + d2;
+    return sm < 10
+      ? {title:'Put the digit sum in the middle', steps:[`${d1} + ${d2} = ${sm}`, `${d1} | ${sm} | ${d2} → ${ans}`]}
+      : {title:'Put the digit sum in the middle, carry the 1', steps:[`${d1} + ${d2} = ${sm}`, `${d1} | ${sm} | ${d2} → carry: ${d1+1} | ${sm-10} | ${d2}`, `= ${ans}`]};
+  }
+  if (s === 12) return {title:'×10 plus ×2', steps:[`${L} × 10 = ${L*10}`, `${L} × 2 = ${L*2}`, `${L*10} + ${L*2} = ${ans}`]};
+  if (L === 25 || L === 50) return {title:`×${L} = ×100 ÷ ${100/L}`, steps:[`${s} × 100 = ${s*100}`, `${s*100} ÷ ${100/L} = ${ans}`]};
+  if (s === 4 && L < 60) return {title:'Double twice', steps:[`${L} → ${2*L}`, `${2*L} → ${ans}`]};
+  if (s === 8 && L < 40) return {title:'Double three times', steps:[`${L} → ${2*L}`, `${2*L} → ${4*L}`, `${4*L} → ${ans}`]};
+  if (L % 10 >= 8) {
+    const r = ceil10(L), d = r - L;
+    return {title:'Round up, then subtract', steps:[`${s} × ${L} = ${s} × ${r} − ${s} × ${d}`, `${s} × ${r} = ${s*r}`, `${s*r} − ${s*d} = ${ans}`],
+            tip:`${L} is ${d} below ${r}, so this is two easy steps instead of a carry.`};
+  }
+  if (L % 10 === 0) return {title:'Multiply, then add the zero', steps:[`${s} × ${L/10} = ${s*L/10}`, `add the zero → ${ans}`]};
+  const tens = L - L%10, ones = L%10;
+  return {title:'Split, multiply, add (left to right)', steps:[`${s} × ${tens} = ${s*tens}`, `${s} × ${ones} = ${s*ones}`, `${s*tens} + ${s*ones} = ${ans}`],
+          tip: s === 6 ? `Or ×3 then double: ${L} × 3 = ${3*L}, doubled = ${ans}.` : null};
+}
+function mDiv(p, q){
+  const ans = p / q;
+  if (q === 10) return {title:'Drop the last zero', steps:[`${p} → ${ans}`]};
+  if (q > 12 && ans <= 12) {
+    const r = Math.round(q/10)*10 || q, est = Math.round(p / r);
+    return {title:'The answer is small, so estimate it', steps:[`Ask: ${q} × ? = ${p}`, `${q} ≈ ${r}, and ${p} ÷ ${r} ≈ ${(p/r).toFixed(1)}`, `Try the nearest whole number: ${q} × ${ans} = ${p} ✓`],
+            tip:'If the divisor is over 12, the answer is between 2 and 12. Guess it and confirm with one multiplication.'};
+  }
+  if (ans % 10 === 0) return {title:'Drop the zero, then divide', steps:[`${p/10} ÷ ${q} = ${ans/10}`, `add the zero back → ${ans}`]};
+  const tens = Math.floor(ans/10)*10, rem = p - q*tens;
+  const steps = tens ? [`${q} × ${tens} = ${q*tens}`, `${p} − ${q*tens} = ${rem}`, `${rem} ÷ ${q} = ${ans - tens}`, `${tens} + ${ans - tens} = ${ans}`] : [`${q} × ${ans} = ${p}`];
+  let tip = null;
+  if ([3,7,9].includes(q)) tip = `Last-digit check: ${q} × ${ans%10} is the only fact ending in ${p%10}, so the answer ends in ${ans%10}.`;
+  return {title:'Take out the tens, then the ones', steps, tip};
+}
+function mTrig(fn, d, u){
+  const steps = [];
+  if (u === 'r') steps.push(`${radLabel(d)} = ${d}°  (π = 180°)`);
+  const val = pretty(trigVal(fn, d));
+  if (d % 90 === 0) {
+    const pt = {0:'(1, 0)',90:'(0, 1)',180:'(−1, 0)',270:'(0, −1)',360:'(1, 0)'}[d];
+    steps.push(`${d}° is the point ${pt} = (cos, sin)`);
+    steps.push(fn === 'tan' ? `tan = sin/cos → ${val}` : `${fn} = ${val}`);
+    return {title:'Read it off the axis', steps};
+  }
+  const ref = d <= 90 ? d : d <= 180 ? 180 - d : d <= 270 ? d - 180 : 360 - d;
+  const quad = d < 90 ? 1 : d < 180 ? 2 : d < 270 ? 3 : 4;
+  const pos = {sin:[1,2], cos:[1,4], tan:[1,3]}[fn].includes(quad);
+  steps.push(`Reference angle ${ref}° → ${fn} ${ref}° = ${pretty(trigVal(fn, ref))}`);
+  steps.push(`${d}° is in quadrant ${['I','II','III','IV'][quad-1]}, where ${fn} is ${pos ? 'positive' : 'negative'}`);
+  steps.push(`→ ${val}`);
+  return {title:'Reference angle + sign', steps,
+          tip: fn === 'tan' ? 'tan 30°, 45°, 60° = √3/3, 1, √3.' : 'sin 0°, 30°, 45°, 60°, 90° = √0/2, √1/2, √2/2, √3/2, √4/2. Cos runs the same list backwards. "All Students Take Calculus" gives which functions are positive in Q I–IV.'};
+}
+function mLog(i){
+  const [text, ans] = LOGS[i], a = pretty(String(ans));
+  let m;
+  if (text === 'ln(0)') return {title:'Limit, not a value', steps:['ln x → −∞ as x → 0⁺', 'so ln(0) is undefined (−∞)'], tip:'e to any power is positive, so nothing gives 0.'};
+  if (text === 'ln(1)' || text === 'e⁰') return {title:'Anything to the 0 is 1', steps:['e⁰ = 1, so ln(1) = 0 and e⁰ = 1']};
+  if ((m = text.match(/^e\^\((\d*) ?ln (\d+)\)$/))) { const k = +(m[1]||1), n = +m[2]; return {title:'e and ln undo each other', steps:[k > 1 ? `${k} ln ${n} = ln ${n}${sup(k)} = ln ${n**k}` : `e^(ln x) = x`, `e^(ln ${n**k}) = ${n**k}`]}; }
+  if (text.startsWith('ln')) return {title:'ln asks: e to what power?', steps:[`Write the input as a power of e`, `${text} → exponent = ${a}`], tip:'√e = e^(1/2), 1/e = e⁻¹.'};
+  if ((m = text.match(/^(\d+)\^\((\d+)\/(\d+)\)$/))) { const base = +m[1], num = +m[2], den = +m[3], root = Math.round(base ** (1/den));
+    return {title:'Root first, then power', steps:[`${base}^(${num}/${den}) = (${den===2?'√':den===3?'∛':den+'th root of '}${base})${sup(num)}`, `root = ${root}`, `${root}${sup(num)} = ${root**num}`], tip:'Taking the root first keeps the numbers small.'}; }
+  if ((m = text.match(/^(\d+)([⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+)$/))) return {title:'Negative exponent = reciprocal', steps:[`${text} = 1 / ${m[1]}${m[2].replace('⁻','')}`, `= ${a}`]};
+  if ((m = UNSUB(text).match(/^log(\d+)\((.+)\)$/))) {
+    const base = m[1], arg = m[2];
+    return {title:`log asks: ${base} to what power?`, steps:[`${base}^k = ${arg}`, `${base}^(${a}) = ${arg}  → k = ${a}`],
+            tip: base === '2' ? 'Know 2¹⁰ = 1024 cold and count up or down from it.' : String(ans).includes('/') ? `Write both sides as powers of a common base, then divide the exponents.` : null};
+  }
+  return {title:'Rewrite as a power', steps:[`${text} = ${a}`]};
+}
+function mPow(k){
+  const [t, x, y] = k.split(','), n = +x, e = +y;
+  if (t === 'q') {
+    if (n % 10 === 0) return {title:'Square the digit, add two zeros', steps:[`${n/10}² = ${(n/10)**2}`, `→ ${n*n}`]};
+    if (n % 10 === 5) { const h = (n-5)/10; return {title:'Ends in 5: n(n+1), then 25', steps:[`${h} × ${h+1} = ${h*(h+1)}`, `append 25 → ${n*n}`]}; }
+    const r = Math.round(n/10)*10, d = Math.abs(n - r);
+    return {title:'(n − d)(n + d) + d²', steps:[`${n}² = ${n-d} × ${n+d} + ${d}²`, `${n-d} × ${n+d} = ${(n-d)*(n+d)}`, `${(n-d)*(n+d)} + ${d*d} = ${n*n}`],
+            tip:`Pick d so one factor is a round number (${r}).`};
+  }
+  if (t === 'c') return {title:'Square, then multiply', steps:[`${n}² = ${n*n}`, `${n*n} × ${n} = ${n**3}`], tip:'Worth memorizing up to 12³ = 1728.'};
+  if (t === 'r') {
+    const N2 = n*n, lo = Math.floor(n/10)*10, ld = N2 % 10;
+    const cands = [...new Set([1,2,3,4,5,6,7,8,9,0].filter(z => (z*z)%10 === ld))];
+    return {title:'Last digit + bracket', steps:[`${N2} ends in ${ld} → root ends in ${cands.join(' or ')}`, `${lo}² = ${lo*lo} ≤ ${N2} < ${(lo+10)**2} = ${lo+10}²`, `${lo+5}² = ${(lo+5)**2} → ${N2 < (lo+5)**2 ? 'lower' : 'upper'} half → ${n}`]};
+  }
+  if (t === 'k') { const N3 = n**3, th = Math.floor(N3/1000);
+    return {title:'Cube roots: the last digit is unique', steps:[`${N3} ends in ${N3%10} → root ends in ${CUBE_END[N3%10]}`, n >= 10 ? `${Math.floor(n/10)*10}³ = ${(Math.floor(n/10)*10)**3} ≤ ${N3} < ${(Math.floor(n/10)*10+10)**3} → tens digit ${Math.floor(n/10)}` : 'under 1000 → one digit', `→ ${n}`],
+            tip:'Cube endings: 2↔8 and 3↔7 swap, every other digit maps to itself.'}; }
+  if (n === 2) { if (e <= 10) return {title:'Double up from 2⁵ = 32', steps:[Array.from({length:e-4},(_,i)=>2**(i+5)).join(' → ')]};
+    return {title:'Anchor on 2¹⁰ = 1024', steps:[`2${sup(e)} = 2¹⁰ × 2${sup(e-10)}`, `1024 × ${2**(e-10)} = ${2**e}`]}; }
+  if (e % 2 === 0) return {title:'Square the half power', steps:[`${n}${sup(e)} = (${n}${sup(e/2)})²`, `${n}${sup(e/2)} = ${n**(e/2)}`, `${n**(e/2)}² = ${n**e}`]};
+  return {title:'Build it up', steps:[Array.from({length:e},(_,i)=>n**(i+1)).join(' → ')]};
+}
+function mPoly(k){
+  const v = k.split(',');
+  if (v[0] === 'f') { const [r1, r2, x] = v.slice(1).map(Number);
+    return {title:'Plug into each factor, then multiply', steps:[`x − ${P(r1)} = ${N(x-r1)}`, `x − ${P(r2)} = ${N(x-r2)}`, `${P(x-r1)} × ${P(x-r2)} = ${N((x-r1)*(x-r2))}`], tip:'Never expand a factored polynomial to evaluate it.'}; }
+  const [a3,a2,a1,a0,x] = v.map(Number);
+  const cs = a3 ? [a3,a2,a1,a0] : [a2,a1,a0];
+  if (x === 0) return {title:'x = 0 leaves the constant', steps:[`f(0) = ${N(cs[cs.length-1])}`]};
+  let acc = cs[0]; const steps = [`start with the lead coefficient: ${N(acc)}`];
+  for (let i = 1; i < cs.length; i++) { const nx = acc*x + cs[i]; steps.push(`${P(acc)} × ${P(x)} ${cs[i] < 0 ? '−' : '+'} ${Math.abs(cs[i])} = ${N(nx)}`); acc = nx; }
+  return {title:"Horner's method: multiply by x, add the next coefficient", steps,
+          tip:`No powers needed. Each step is one multiply and one add${x === 1 ? '. At x = 1 you can just sum the coefficients.' : x === -1 ? '. At x = −1, flip the signs of the odd-power terms and sum.' : '.'}`};
+}
+function mComb(k){
+  const [t, a, b] = k.split(','), n = +a, r = +b;
+  if (t === 'f') return n <= 1 ? {title:'Base case', steps:[`${n}! = 1`]} : {title:'Build from the one before', steps:[`${n}! = ${n} × ${n-1}! = ${n} × ${fact(n-1)} = ${fact(n)}`], tip:'Anchors: 5! = 120, 6! = 720, 7! = 5040, 10! = 3,628,800.'};
+  if (t === 'b') { const kk = Math.min(r, n-r), top = Array.from({length:kk},(_,i)=>n-i), num = top.reduce((x,y)=>x*y,1);
+    return {title: kk < r ? `Use symmetry: C(${n},${r}) = C(${n},${kk})` : 'k terms on top, k! on the bottom',
+            steps:[`${top.join(' × ')} / ${kk}!`, `= ${num} / ${fact(kk)}`, `= ${choose(n,r)}`], tip:'Cancel before multiplying to keep the numbers small.'}; }
+  const top = Array.from({length:r},(_,i)=>n-i);
+  return {title:`Multiply ${r} falling terms`, steps:[`${top.join(' × ')} = ${top.reduce((x,y)=>x*y,1)}`]};
+}
+function methodHTML(key){
+  const m = method(key); if (!m) return '';
+  return `<div class="method"><div class="mt">Fastest way · ${m.title}</div><ol>${m.steps.map(s => `<li>${s}</li>`).join('')}</ol>${m.tip ? `<div class="mtip">${m.tip}</div>` : ''}</div>`;
+}
+// Clicking a problem row in any review table expands the method under it.
+document.addEventListener('click', e => {
+  const tr = e.target.closest('tr[data-key]'); if (!tr) return;
+  const nx = tr.nextElementSibling;
+  if (nx && nx.classList.contains('mrow')) { nx.remove(); tr.classList.remove('open'); return; }
+  const cols = tr.children.length;
+  tr.insertAdjacentHTML('afterend', `<tr class="mrow"><td colspan="${cols}">${methodHTML(tr.dataset.key)}</td></tr>`);
+  tr.classList.add('open');
+});
+
 /* ---------- round timeline + histogram ---------- */
 const OPCOLOR = {add:'#2f5bd3',sub:'#0f9d8a',mul:'#d9480f',div:'#b7791f',trig:'#8b5cf6',log:'#db2777',pow:'#0891b2',poly:'#65a30d',comb:'#78716c'};
 let lastRound = null;
@@ -692,13 +886,13 @@ $('#results').addEventListener('click', e => {
   if (r.dataset.i !== undefined) {
     r.classList.add('sel');
     const i = +r.dataset.i, x = log[i];
-    showPick(`<div class="pt">${x.text} = ${x.ans}</div><div class="pm">#${i+1} of ${log.length} · ${OPNAME[x.op]} · <b class="${x.dt>thr?'slow':''}">${fmt(x.dt)}</b> · started at ${(x.at/1000).toFixed(1)}s${x.errs?` · <span class="slow">${x.errs} wrong ${x.errs>1?'tries':'try'}</span>`:''}${x.review?' · review problem':''}${x.bad?' · flagged':''}</div>`);
+    showPick(`<div class="pt">${x.text} = ${x.ans}</div><div class="pm">#${i+1} of ${log.length} · ${OPNAME[x.op]} · <b class="${x.dt>thr?'slow':''}">${fmt(x.dt)}</b> · started at ${(x.at/1000).toFixed(1)}s${x.errs?` · <span class="slow">${x.errs} wrong ${x.errs>1?'tries':'try'}</span>`:''}${x.review?' · review problem':''}${x.bad?' · flagged':''}</div>${methodHTML(x.key)}`);
   } else {
     const k = +r.dataset.b;
     $$(`#rHist rect[data-b="${k}"]`).forEach(x => x.classList.add('sel'));
     const items = log.map((x,i)=>({...x,i})).filter(x => Math.min(lastRound.nb-1, Math.floor(x.dt/500)) === k);
     showPick(`<div class="pm" style="margin:0 0 6px">${(k*.5).toFixed(1)}–${((k+1)*.5).toFixed(1)}s · ${items.length} problem${items.length===1?'':'s'}</div>` +
-      `<table>${items.map(x=>`<tr><td>${x.text}</td><td>${x.ans}</td><td class="txt" style="color:${OPCOLOR[x.op]}">${OPNAME[x.op]}</td><td class="${x.dt>thr?'slow':''}">${fmt(x.dt)}</td><td class="txt" style="color:var(--mute)">#${x.i+1}</td></tr>`).join('')}</table>`);
+      `<table>${items.map(x=>`<tr data-key="${x.key}"><td>${x.text}</td><td>${x.ans}</td><td class="txt" style="color:${OPCOLOR[x.op]}">${OPNAME[x.op]}</td><td class="${x.dt>thr?'slow':''}">${fmt(x.dt)}</td><td class="txt" style="color:var(--mute)">#${x.i+1}</td></tr>`).join('')}</table>`);
   }
 });
 
@@ -729,7 +923,7 @@ function showResults(g, full){
   $('#rDist').innerHTML = distChart(g.ops.map(op => ({label:OPNAME[op], arr:g.log.filter(x=>x.op===op).map(x=>x.dt)})));
   const fl = g.log.filter(x=>x.bad).sort((a,b)=>b.dt-a.dt);
   $('#rFlag').innerHTML = fl.length
-    ? `<table><tr><th>Problem</th><th>Answer</th><th>Time</th><th>Wrong tries</th></tr>${fl.slice(0,15).map(x=>`<tr><td>${x.text}</td><td>${x.ans}</td><td class="${x.dt>thr?'slow':''}">${fmt(x.dt)}</td><td class="${x.errs?'slow':''}">${x.errs||'–'}</td></tr>`).join('')}</table>${fl.length>15?`<p class="hint">+${fl.length-15} more on the weak list</p>`:''}`
+    ? `<table><tr><th>Problem</th><th>Answer</th><th>Time</th><th>Wrong tries</th></tr>${fl.slice(0,15).map(x=>`<tr data-key="${x.key}"><td>${x.text}</td><td>${x.ans}</td><td class="${x.dt>thr?'slow':''}">${fmt(x.dt)}</td><td class="${x.errs?'slow':''}">${x.errs||'–'}</td></tr>`).join('')}</table>${fl.length>15?`<p class="hint">+${fl.length-15} more on the weak list</p>`:''}`
     : '<div class="empty">Nothing flagged. Every answer was clean and under the threshold.</div>';
   $('#again').focus();
 }
@@ -767,7 +961,7 @@ function renderWeak(){
   const thr = state.settings.thr*1000;
   $('#weakList').innerHTML = w.length
     ? `<table><tr><th>Problem</th><th>Ans</th><th>Avg</th><th>Flagged</th><th>Clean streak</th></tr>${w.slice(0,40).map(([k,v]) => { const p = fromKey(k);
-        return `<tr><td>${p.short}</td><td>${p.disp}</td><td class="${v.t>thr?'slow':''}">${fmt(v.t)}</td><td>${v.flags}${v.err?` <span class="slow" title="times a wrong answer was typed">(${v.err}✗)</span>`:''}</td><td class="dots">${Array.from({length:GRAD},(_,i)=>`<span class="${i<(v.box||0)?'f':''}"></span>`).join('')}</td></tr>`; }).join('')}</table>${w.length>40?`<p class="hint">Showing 40 of ${w.length}.</p>`:''}`
+        return `<tr data-key="${k}"><td>${p.short}</td><td>${p.disp}</td><td class="${v.t>thr?'slow':''}">${fmt(v.t)}</td><td>${v.flags}${v.err?` <span class="slow" title="times a wrong answer was typed">(${v.err}✗)</span>`:''}</td><td class="dots">${Array.from({length:GRAD},(_,i)=>`<span class="${i<(v.box||0)?'f':''}"></span>`).join('')}</td></tr>`; }).join('')}</table>${w.length>40?`<p class="hint">Showing 40 of ${w.length}.</p>`:''}`
     : '<div class="empty">No weak problems yet.</div>';
   $('#drillBtn').disabled = !w.length;
 }
@@ -818,7 +1012,7 @@ $('#importFile').addEventListener('change', async e => {
   e.target.value = '';
 });
 
-if (location.search.includes('zdtest')) window.__zd = {gen, fromKey, norm, LOGS, trigVal, cur: () => G && G.cur};
+if (location.search.includes('zdtest')) window.__zd = {gen, fromKey, norm, LOGS, trigVal, method, cur: () => G && G.cur};
 loadSettingsUI();
 initSync();
 })();
