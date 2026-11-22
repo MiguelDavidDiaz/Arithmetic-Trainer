@@ -52,7 +52,6 @@ input[type=range]{accent-color:var(--acc);width:100%}
 .hud b{color:var(--ink);font-size:18px}
 .prob{font-family:var(--mono);font-size:clamp(38px,9vw,60px);font-weight:600;letter-spacing:-.02em;min-height:1.3em;white-space:pre-line;line-height:1.25}
 .prob.long{font-size:clamp(22px,5.4vw,34px)}
-.badge{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--warn);height:16px;margin-bottom:6px}
 #answer{font-family:var(--mono);font-size:32px;text-align:center;width:min(260px,82%);margin:20px auto 8px;display:block;padding:10px;border:2px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);outline:none}
 #answer:focus{border-color:var(--acc)}
 #answer.wrong{border-color:var(--bad)}
@@ -68,13 +67,6 @@ table{width:100%;border-collapse:collapse;font-size:14px}
 th{text-align:left;font-size:12px;color:var(--mute);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line)}
 td{padding:7px 8px;border-bottom:1px solid var(--line);font-family:var(--mono)}
 td.txt{font-family:inherit}
-.heat{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px}
-.cell{border-radius:10px;padding:8px;border:1px solid var(--line);text-align:center}
-.cell .k{font-size:12px;color:var(--mute)}
-.cell .v{font-family:var(--mono);font-size:16px;font-weight:600}
-.cell .s{font-size:11px;color:var(--mute)}
-.dots span{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--line);margin-right:2px}
-.dots span.f{background:var(--good)}
 .empty{color:var(--mute);font-size:14px;padding:10px 0}
 .slow{color:var(--bad)}
 svg text{fill:var(--mute);font-size:11px;font-family:var(--mono)}
@@ -95,6 +87,7 @@ tr.mrow .method{margin-top:0}
 .method .mt{font-weight:600;font-size:13px;color:var(--acc);margin-bottom:4px}
 .method ol{margin:0;padding-left:20px;font-family:var(--mono);font-size:14px;line-height:1.7}
 .method .mtip{font-size:13px;color:var(--mute);margin-top:4px}
+.bar{height:6px;border-radius:3px;background:var(--bad);opacity:.75}
 .pick .pm{color:var(--mute);font-size:13px;margin-top:2px}
 </style>
 </head>
@@ -129,7 +122,7 @@ tr.mrow .method{margin-top:0}
       </div>
       <div class="row" style="margin-top:18px">
         <button class="btn" id="start">Start round</button>
-        <button class="btn ghost" id="startWeak">Weak-only drill</button>
+        <button class="btn ghost" id="startWeak">Focus drill</button>
       </div>
       <p class="hint hidden" id="setupHint"></p>
       <p class="hint" id="hardHint">Hard mode answers can be exact values. Type <b>r3/2</b> for √3/2, <b>1/2</b> or <b>.5</b>, <b>u</b> for undefined, <b>-inf</b> for −∞, and press Enter to submit a guess.</p>
@@ -149,7 +142,6 @@ tr.mrow .method{margin-top:0}
 
   <div id="game" class="card">
     <div class="hud"><span>Score <b id="score">0</b></span><span id="modeLbl"></span><span>Time <b id="time">120</b></span></div>
-    <div class="badge" id="badge"></div>
     <div class="prob" id="prob"></div>
     <input id="answer" inputmode="numeric" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
     <div id="keys" class="hidden"></div>
@@ -176,7 +168,7 @@ tr.mrow .method{margin-top:0}
       <div id="rFlag"></div>
       <div class="row" style="margin-top:16px">
         <button class="btn" id="again">Play again</button>
-        <button class="btn ghost" id="drillNow">Drill weak list</button>
+        <button class="btn ghost" id="drillNow">Focus drill</button>
         <button class="btn ghost" id="toSetup">Settings</button>
       </div>
     </div>
@@ -191,15 +183,11 @@ tr.mrow .method{margin-top:0}
     <p class="hint">Each row shows your last 400 solves of that type. The box spans the middle 50%, the bar is the median, the whiskers run from the 10th to the 90th percentile, and the dashed line is your slow threshold. Dots past the right edge are capped.</p>
   </div>
   <div class="card">
-    <h2>Average time by fact family</h2>
-    <div class="heat" id="heat"></div>
-    <p class="hint">Multiplication and division are grouped by the small factor (2–12). The redder the cell, the slower you are compared with your slow threshold.</p>
-  </div>
-  <div class="card">
-    <h2>Weak list <span id="weakCount" class="h2note"></span> <span class="h2note">· tap a problem for the fastest way</span></h2>
-    <div id="weakList"></div>
+    <h2>Weak areas <span class="h2note">· tap one for an example and the fastest way</span></h2>
+    <div id="areas"></div>
+    <p class="hint">Problems are grouped by type, like 7 × a 2-digit number, subtraction with a borrow, or tan in quadrant III. Your slowest and most error-prone types come up more often in every round, and a Focus drill uses nothing but your weakest few.</p>
     <div class="row" style="margin-top:14px">
-      <button class="btn" id="drillBtn">Drill these</button>
+      <button class="btn" id="drillBtn">Focus drill</button>
       <button class="btn danger" id="resetBtn">Reset all data</button>
     </div>
   </div>
@@ -246,8 +234,8 @@ const OPNAME = {add:'Add',sub:'Sub',mul:'Mul',div:'Div',trig:'Trig',log:'Log/exp
 const PREFIX = {a:'add',s:'sub',m:'mul',d:'div',t:'trig',l:'log',x:'pow',p:'poly',c:'comb'};
 const NUMERIC_OPS = new Set(['add','sub','mul','div','pow','comb']);
 const DEF = {ops:Object.fromEntries(OPS.map(o => [o.id, !!o.core])),dur:120,thr:3,hard:false,a1:2,a2:100,b1:2,b2:100,m1:2,m2:12,n1:2,n2:100};
-const REVIEW_MIX = 35; // % of problems drawn from the weak list in a normal round
-const MAX_ENTRIES = 600, GRAD = 3, TIMES_CAP = 400;
+const FOCUS_MIX = 35; // % of problems in a normal round drawn from your weak problem types
+const MIN_SEEN = 3, TIMES_CAP = 400;
 
 let state = blank();
 try { const raw = localStorage.getItem(LS_KEY); if (raw) state = normalize(JSON.parse(raw)); } catch(e) {}
@@ -257,7 +245,7 @@ function normalize(s){
   s = s || {};
   const st = s.settings || {};
   return {v:1, updated:s.updated||0, settings:{...DEF, ...st, ops:{...DEF.ops, ...(st.ops||{})}},
-          stats:s.stats||{}, cats:s.cats||{}, times:s.times||{}, hist:Array.isArray(s.hist)?s.hist:[]};
+          pats:s.pats||{}, times:s.times||{}, hist:Array.isArray(s.hist)?s.hist:[]};
 }
 
 /* ---------- storage (+ Claude account sync when hosted as a Claude artifact) ---------- */
@@ -500,15 +488,63 @@ function gen(op){
   return genComb();
 }
 const opOf = k => PREFIX[k[0]];
-function weakEntries(ops){ return Object.entries(state.stats).filter(([k,v]) => (v.box||0) < GRAD && ops.includes(opOf(k))); }
-function pickWeak(ops, recent){
-  const c = weakEntries(ops).filter(([k]) => !recent.includes(k));
+/* ---------- problem types (what "weak" is measured on) ---------- */
+const nd = n => String(Math.abs(n)).length;
+const DW = n => ['','1-digit','2-digit','3-digit','4-digit','5-digit','6-digit'][nd(n)] || 'big';
+const ROMAN = ['I','II','III','IV'];
+function classify(key){
+  const t = key[0], b = key.slice(2);
+  if (t === 'a') { const [x,y] = b.split(',').map(Number), hi = Math.max(x,y), lo = Math.min(x,y), c = (x%10 + y%10) >= 10;
+    return {id:`add:${nd(hi)}+${nd(lo)}${c?'c':''}`, label:`${DW(hi)} + ${DW(lo)}, ${c?'carrying':'no carry'}`}; }
+  if (t === 's') { const [c,a] = b.split('-').map(Number), br = (c%10) < (a%10);
+    return {id:`sub:${nd(c)}-${nd(a)}${br?'b':''}`, label:`${DW(c)} − ${DW(a)}, ${br?'borrowing':'no borrow'}`}; }
+  if (t === 'm') { const [x,y] = b.split('x').map(Number), sm = Math.min(x,y), L = Math.max(x,y);
+    if (L <= 12) return {id:'mul:tt', label:'Times tables (up to 12 × 12)'};
+    if (sm <= 12) return {id:`mul:x${sm}`, label:`${sm} × a ${DW(L)} number`};
+    return {id:`mul:${nd(sm)}x${nd(L)}`, label:`${DW(sm)} × ${DW(L)}`}; }
+  if (t === 'd') { const [pp,q] = b.split('/').map(Number), a = pp/q;
+    if (q <= 12 && a <= 12) return {id:'div:tt', label:'Division facts (up to 144 ÷ 12)'};
+    if (q <= 12) return {id:`div:${q}`, label:`Large number ÷ ${q}`};
+    return {id:`div:${nd(q)}d`, label:`Dividing by a ${DW(q)} number`}; }
+  if (t === 't') { const [fn, dd] = b.split(','), d = +dd;
+    if (d % 90 === 0) return {id:`trig:${fn}ax`, label:`${fn} at 0°, 90°, 180°, 270°`};
+    const qd = d < 90 ? 0 : d < 180 ? 1 : d < 270 ? 2 : 3;
+    return {id:`trig:${fn}${qd+1}`, label:`${fn} in quadrant ${ROMAN[qd]}`}; }
+  if (t === 'l') { const tx = UNSUB(LOGS[+b][0]);
+    if (/^(ln|e)/.test(tx)) return {id:'log:ln', label:'ln and eˣ'};
+    if (tx.startsWith('log2(')) return {id:'log:2', label:'log₂'};
+    if (tx.startsWith('log10(')) return {id:'log:10', label:'log₁₀'};
+    if (tx.startsWith('log')) return {id:'log:b', label:'Logs in other bases'};
+    if (tx.includes('^(')) return {id:'log:frac', label:'Fractional exponents'};
+    return {id:'log:neg', label:'Negative exponents'}; }
+  if (t === 'x') { const [k, x] = b.split(',');
+    return k === 'q' ? {id:'pow:sq', label:'Squares'} : k === 'c' ? {id:'pow:cube', label:'Cubes'} : k === 'r' ? {id:'pow:sqrt', label:'Square roots'}
+         : k === 'k' ? {id:'pow:cbrt', label:'Cube roots'} : x === '2' ? {id:'pow:2', label:'Powers of 2'} : {id:'pow:b', label:'Powers of 3, 5, 6, 7'}; }
+  if (t === 'p') { const v = b.split(','), x = +v[v.length-1], neg = x < 0;
+    const base = v[0] === 'f' ? ['fac','Factored form'] : +v[0] ? ['cub','Cubics'] : ['quad','Quadratics'];
+    return {id:`poly:${base[0]}${neg?'n':''}`, label:`${base[1]}${neg?' at negative x':''}`}; }
+  const k = b.split(',')[0];
+  return k === 'f' ? {id:'comb:f', label:'Factorials'} : k === 'b' ? {id:'comb:c', label:'n choose k'} : {id:'comb:p', label:'Permutations P(n,k)'};
+}
+function genPattern(id){
+  const op = id.split(':')[0];
+  for (let i = 0; i < 400; i++) { const p = gen(op); if (classify(p.key).id === id) return p; }
+  return null;
+}
+const patScore = v => v.t / (state.settings.thr*1000) + 1.5 * v.r;
+function rankedPatterns(ops){
+  return Object.entries(state.pats).filter(([id,v]) => v.n >= MIN_SEEN && ops.includes(id.split(':')[0]))
+    .sort((a,b) => patScore(b[1]) - patScore(a[1]));
+}
+function pickFocus(ops, focusOnly, recent){
+  let c = rankedPatterns(ops);
   if (!c.length) return null;
-  const thr = state.settings.thr*1000;
-  const w = c.map(([k,v]) => (GRAD - (v.box||0)) * (1 + (v.err||0)/Math.max(v.n||1,1)) * Math.min(3, Math.max(.6, (v.t||thr)/thr)));
-  let r = Math.random() * w.reduce((a,b)=>a+b,0);
-  for (let i=0;i<c.length;i++){ r -= w[i]; if (r <= 0) return fromKey(c[i][0]); }
-  return fromKey(c[c.length-1][0]);
+  if (focusOnly) c = c.slice(0, 4);
+  const w = c.map(([,v]) => patScore(v) ** 3);
+  let r = Math.random() * w.reduce((a,b)=>a+b,0), id = c[c.length-1][0];
+  for (let i=0;i<c.length;i++){ r -= w[i]; if (r <= 0) { id = c[i][0]; break; } }
+  for (let i=0;i<4;i++){ const p = genPattern(id); if (p && !recent.includes(p.key)) return p; }
+  return null;
 }
 
 /* ---------- on-screen helper keys ---------- */
@@ -530,25 +566,24 @@ function startRound(weakOnly){
   readSettingsUI(); save();
   const ops = enabledOps();
   if (!ops.length) { alertInline('Pick at least one operation.'); return; }
-  if (weakOnly && !weakEntries(ops).length) { alertInline('Your weak list is empty for these operations. Play a normal round first.'); return; }
+  if (weakOnly && !rankedPatterns(ops).length) { alertInline('Play a normal round first so it can find your weak areas.'); return; }
   G = {weakOnly, ops, start:performance.now(), score:0, end:performance.now() + state.settings.dur*1000, recent:[], log:[], cur:null, t0:0, errs:0, tried:new Set()};
   $$('nav button').forEach((x,i) => x.classList.toggle('on', i===0));
   ['play','weak','hist'].forEach(t => $('#tab-'+t).classList.toggle('hidden', t !== 'play'));
   $('#setup').classList.add('hidden'); $('#results').classList.add('hidden'); $('#game').style.display='block';
-  $('#modeLbl').textContent = (state.settings.hard ? 'hard ' : '') + (weakOnly ? 'weak-only' : '');
+  $('#modeLbl').textContent = (state.settings.hard ? 'hard ' : '') + (weakOnly ? 'focus' : '');
   $('#score').textContent = '0';
   next(); tick();
   const inp = $('#answer'); inp.value=''; inp.focus();
 }
 function alertInline(msg){ const h = $('#setupHint'); h.textContent = msg; h.style.color='var(--bad)'; h.classList.remove('hidden'); clearTimeout(h._t); h._t = setTimeout(()=>h.classList.add('hidden'),3500); }
 function next(){
-  let p = null, review = false;
-  if (G.weakOnly || Math.random()*100 < REVIEW_MIX) { p = pickWeak(G.ops, G.recent); review = !!p; }
+  let p = null;
+  if (G.weakOnly || Math.random()*100 < FOCUS_MIX) p = pickFocus(G.ops, G.weakOnly, G.recent);
   if (!p) { for (let i=0;i<6;i++){ p = gen(G.ops[ri(0,G.ops.length-1)]); if (!G.recent.includes(p.key)) break; } }
-  G.cur = p; G.cur.review = review; G.t0 = performance.now(); G.errs = 0; G.tried = new Set();
+  G.cur = p; G.t0 = performance.now(); G.errs = 0; G.tried = new Set();
   G.recent.push(p.key); if (G.recent.length > 6) G.recent.shift();
   const el = $('#prob'); el.textContent = p.text; el.classList.toggle('long', p.long);
-  $('#badge').textContent = review ? 'review' : '';
   const inp = $('#answer');
   inp.classList.remove('wrong');
   const mode = p.inputText ? 'text' : 'numeric';
@@ -584,24 +619,13 @@ $('#answer').addEventListener('keydown', e => {
 function record(){
   const p = G.cur, dt = performance.now() - G.t0, thr = state.settings.thr*1000;
   const bad = dt > thr || G.errs > 0;
-  const c = state.cats[p.cat] || (state.cats[p.cat] = {n:0, t:0, bad:0});
-  c.n++; c.t = c.n === 1 ? dt : c.t*0.85 + dt*0.15; if (bad) c.bad++;
   const T = state.times[p.op] || (state.times[p.op] = []);
   T.push(Math.round(dt/10)*10); if (T.length > TIMES_CAP) T.splice(0, T.length - TIMES_CAP);
-  let s = state.stats[p.key];
-  if (bad || s) {
-    s = s || (state.stats[p.key] = {n:0, err:0, flags:0, t:0, box:0});
-    s.n++; s.t = s.n === 1 ? dt : s.t*0.5 + dt*0.5; if (G.errs) s.err++;
-    if (bad) { s.box = 0; s.flags++; } else s.box = Math.min(5, (s.box||0) + 1);
-    s.last = Date.now();
-  }
-  G.log.push({key:p.key, text:p.short, ans:p.disp, op:p.op, dt, at:G.t0 - G.start, errs:G.errs, bad, review:p.review});
-}
-function prune(){
-  const e = Object.entries(state.stats);
-  if (e.length <= MAX_ENTRIES) return;
-  e.sort((a,b) => ((b[1].box||0) - (a[1].box||0)) || ((a[1].last||0) - (b[1].last||0)));
-  for (const [k,v] of e) { if (Object.keys(state.stats).length <= MAX_ENTRIES) break; if ((v.box||0) >= GRAD) delete state.stats[k]; }
+  const pid = classify(p.key).id;
+  const v = state.pats[pid] || (state.pats[pid] = {n:0, t:0, r:0});
+  v.n++; const al = v.n < 5 ? 1/v.n : 0.2;          // running mean at first, then a moving average so improvement shows
+  v.t += al * (dt - v.t); v.r += al * ((bad ? 1 : 0) - v.r);
+  G.log.push({key:p.key, text:p.short, ans:p.disp, op:p.op, dt, at:G.t0 - G.start, errs:G.errs, bad});
 }
 function finish(quit){
   clearTimeout(G.timer);
@@ -610,7 +634,7 @@ function finish(quit){
   const full = !quit;
   if (full) state.hist.push({ts:Date.now(), score:g.score, dur:state.settings.dur, ops:g.ops.join(','), weak:g.weakOnly});
   if (state.hist.length > 300) state.hist = state.hist.slice(-300);
-  prune(); save();
+  save();
   showResults(g, full);
 }
 $('#quit').addEventListener('click', () => G && finish(true));
@@ -826,7 +850,8 @@ document.addEventListener('click', e => {
   const nx = tr.nextElementSibling;
   if (nx && nx.classList.contains('mrow')) { nx.remove(); tr.classList.remove('open'); return; }
   const cols = tr.children.length;
-  tr.insertAdjacentHTML('afterend', `<tr class="mrow"><td colspan="${cols}">${methodHTML(tr.dataset.key)}</td></tr>`);
+  const ex = tr.dataset.ex ? (() => { const q = fromKey(tr.dataset.key); return `<div class="pm" style="padding-top:8px">Example: <b style="font-family:var(--mono)">${q.short} = ${q.disp}</b></div>`; })() : '';
+  tr.insertAdjacentHTML('afterend', `<tr class="mrow"><td colspan="${cols}">${ex}${methodHTML(tr.dataset.key)}</td></tr>`);
   tr.classList.add('open');
 });
 
@@ -886,7 +911,7 @@ $('#results').addEventListener('click', e => {
   if (r.dataset.i !== undefined) {
     r.classList.add('sel');
     const i = +r.dataset.i, x = log[i];
-    showPick(`<div class="pt">${x.text} = ${x.ans}</div><div class="pm">#${i+1} of ${log.length} · ${OPNAME[x.op]} · <b class="${x.dt>thr?'slow':''}">${fmt(x.dt)}</b> · started at ${(x.at/1000).toFixed(1)}s${x.errs?` · <span class="slow">${x.errs} wrong ${x.errs>1?'tries':'try'}</span>`:''}${x.review?' · review problem':''}${x.bad?' · flagged':''}</div>${methodHTML(x.key)}`);
+    showPick(`<div class="pt">${x.text} = ${x.ans}</div><div class="pm">#${i+1} of ${log.length} · ${OPNAME[x.op]} · <b class="${x.dt>thr?'slow':''}">${fmt(x.dt)}</b> · started at ${(x.at/1000).toFixed(1)}s${x.errs?` · <span class="slow">${x.errs} wrong ${x.errs>1?'tries':'try'}</span>`:''}${x.bad?' · flagged':''} · ${classify(x.key).label}</div>${methodHTML(x.key)}`);
   } else {
     const k = +r.dataset.b;
     $$(`#rHist rect[data-b="${k}"]`).forEach(x => x.classList.add('sel'));
@@ -903,7 +928,7 @@ function showResults(g, full){
   const sig = g.ops.join(',');
   const same = state.hist.filter(h => h.dur === state.settings.dur && !h.weak && h.ops === sig);
   const best = same.length ? Math.max(...same.map(h=>h.score)) : g.score;
-  $('#rNote').textContent = !full ? 'ended early, not logged' : g.weakOnly ? 'weak-only drill' : (g.score >= best && same.length > 1 ? 'new best' : `best ${best}`);
+  $('#rNote').textContent = !full ? 'ended early, not logged' : g.weakOnly ? 'focus drill' : (g.score >= best && same.length > 1 ? 'new best' : `best ${best}`);
   const thr = state.settings.thr*1000;
   let html = '';
   for (const op of g.ops) {
@@ -911,8 +936,6 @@ function showResults(g, full){
     const avg = l.reduce((a,b)=>a+b.dt,0)/l.length;
     html += `<div class="stat"><div>${OPNAME[op]} · ${l.length}</div><div class="${avg>thr?'slow':''}">${fmt(avg)} avg</div></div>`;
   }
-  const rev = g.log.filter(x=>x.review);
-  if (rev.length) { const clean = rev.filter(x=>!x.bad).length; html += `<div class="stat"><div>Review problems</div><div>${clean}/${rev.length} clean</div></div>`; }
   $('#rStats').innerHTML = html || '<div class="empty">No answers.</div>';
   g.full = full; lastRound = g;
   const used = OPS.map(o=>o.id).filter(o => g.log.some(x=>x.op===o));
@@ -943,27 +966,16 @@ $$('nav button').forEach(b => b.addEventListener('click', () => {
 }));
 
 /* ---------- stats view ---------- */
-function heatColor(ms){
-  const thr = state.settings.thr*1000, r = Math.max(0, Math.min(1, (ms - thr*0.4)/(thr*1.1)));
-  return `hsla(${Math.round(130 - 125*r)},65%,50%,.18)`;
-}
 function renderWeak(){
   $('#allDist').innerHTML = distChart(OPS.map(o => ({label:OPNAME[o.id], arr:state.times[o.id]||[]})));
-  const cats = state.cats;
-  const order = ['add','sub', ...Array.from({length:11},(_,i)=>'m'+(i+2)), ...Array.from({length:11},(_,i)=>'d'+(i+2)), 'tsin','tcos','ttan','log','pow','poly','comb'];
-  const name = k => ({add:'+',sub:'−',tsin:'sin',tcos:'cos',ttan:'tan',log:'log/exp',pow:'powers',poly:'poly',comb:'comb'})[k] || (k[0]==='m'?'×':'÷')+k.slice(1);
-  const cells = order.filter(k => cats[k] && cats[k].n).map(k => { const c = cats[k];
-    return `<div class="cell" style="background:${heatColor(c.t)}"><div class="k">${name(k)}</div><div class="v">${fmt(c.t)}</div><div class="s">${Math.round(100*c.bad/c.n)}% flagged · ${c.n}</div></div>`; });
-  $('#heat').innerHTML = cells.length ? cells.join('') : '<div class="empty">Play a round to see this.</div>';
-  const w = Object.entries(state.stats).filter(([,v]) => (v.box||0) < GRAD)
-    .sort((a,b) => (b[1].flags - a[1].flags) || (b[1].t - a[1].t));
-  $('#weakCount').textContent = w.length ? `· ${w.length}` : '';
-  const thr = state.settings.thr*1000;
-  $('#weakList').innerHTML = w.length
-    ? `<table><tr><th>Problem</th><th>Ans</th><th>Avg</th><th>Flagged</th><th>Clean streak</th></tr>${w.slice(0,40).map(([k,v]) => { const p = fromKey(k);
-        return `<tr data-key="${k}"><td>${p.short}</td><td>${p.disp}</td><td class="${v.t>thr?'slow':''}">${fmt(v.t)}</td><td>${v.flags}${v.err?` <span class="slow" title="times a wrong answer was typed">(${v.err}✗)</span>`:''}</td><td class="dots">${Array.from({length:GRAD},(_,i)=>`<span class="${i<(v.box||0)?'f':''}"></span>`).join('')}</td></tr>`; }).join('')}</table>${w.length>40?`<p class="hint">Showing 40 of ${w.length}.</p>`:''}`
-    : '<div class="empty">No weak problems yet.</div>';
-  $('#drillBtn').disabled = !w.length;
+  const r = rankedPatterns(OPS.map(o=>o.id)), thr = state.settings.thr*1000;
+  const top = r.length ? patScore(r[0][1]) : 1;
+  $('#areas').innerHTML = r.length
+    ? `<table><tr><th>Type</th><th>Avg time</th><th>Flagged</th><th>Seen</th><th style="width:22%"></th></tr>${r.slice(0,15).map(([id,v]) => {
+        const ex = genPattern(id);
+        return `<tr ${ex?`data-key="${ex.key}" data-ex="1"`:''}><td class="txt">${classify(ex ? ex.key : '').label || id}</td><td class="${v.t>thr?'slow':''}">${fmt(v.t)}</td><td>${Math.round(100*v.r)}%</td><td>${v.n}</td><td><div class="bar" style="width:${Math.max(4, 100*patScore(v)/top)}%"></div></td></tr>`; }).join('')}</table>`
+    : '<div class="empty">Play a round or two. Types show up here once you\'ve seen 3 problems of that kind.</div>';
+  $('#drillBtn').disabled = !r.length;
 }
 $('#drillBtn').addEventListener('click', () => startRound(true));
 let resetArm = 0;
@@ -990,7 +1002,7 @@ function renderHist(){
   const r = state.hist.slice(-20).reverse();
   const opn = s => (s.includes(',') ? s.split(',') : (s.match(/add|sub|mul|div/g)||[])).filter(o => ['add','sub','mul','div'].includes(o)).map(o => OPNAME[o]).join(' ');
   $('#histList').innerHTML = r.length
-    ? `<table><tr><th>When</th><th>Score</th><th>Length</th><th>Types</th><th>Mode</th></tr>${r.map(x=>`<tr><td class="txt">${new Date(x.ts).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</td><td>${x.score}</td><td>${x.dur}s</td><td class="txt">${opn(x.ops)}</td><td class="txt">${(x.ops.includes('trig')?'Hard, ':'') + (x.weak?'weak-only':'standard')}</td></tr>`).join('')}</table>`
+    ? `<table><tr><th>When</th><th>Score</th><th>Length</th><th>Types</th><th>Mode</th></tr>${r.map(x=>`<tr><td class="txt">${new Date(x.ts).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</td><td>${x.score}</td><td>${x.dur}s</td><td class="txt">${opn(x.ops)}</td><td class="txt">${(x.ops.includes('trig')?'Hard, ':'') + (x.weak?'focus':'standard')}</td></tr>`).join('')}</table>`
     : '<div class="empty">No rounds yet.</div>';
 }
 
@@ -1007,12 +1019,12 @@ $('#importFile').addEventListener('change', async e => {
     const d = JSON.parse(await f.text());
     if (!d || d.v !== 1) throw 0;
     state = normalize(d); save(); loadSettingsUI(); renderHist();
-    $('#ioMsg').textContent = 'Imported ' + Object.keys(state.stats).length + ' tracked problems and ' + state.hist.length + ' rounds.';
+    $('#ioMsg').textContent = 'Imported ' + Object.keys(state.pats).length + ' problem types and ' + state.hist.length + ' rounds.';
   } catch(err) { $('#ioMsg').textContent = "That file doesn't look like an Arithmetic Trainer export."; }
   e.target.value = '';
 });
 
-if (location.search.includes('zdtest')) window.__zd = {gen, fromKey, norm, LOGS, trigVal, method, cur: () => G && G.cur};
+if (location.search.includes('zdtest')) window.__zd = {gen, fromKey, norm, LOGS, trigVal, method, classify, genPattern, cur: () => G && G.cur};
 loadSettingsUI();
 initSync();
 })();
